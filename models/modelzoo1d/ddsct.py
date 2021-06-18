@@ -565,6 +565,10 @@ class DDSCTransformer(nn.Module):
         self.pos_emb = None
         self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
+        if self.aggregator_mode == 'cls_embed':
+            self.cls_token = nn.Parameter(
+                torch.zeros(1, 1, transformer_channels))
+
         # The sequence of transformer blocks that does all the
         # heavy lifting
         t_blocks = []
@@ -652,6 +656,10 @@ class DDSCTransformer(nn.Module):
 
         out = self.init_encoder(x)
         b, c, length = out.size()
+
+        if self.aggregator_mode == 'cls_embed':
+            cls_tokens = self.cls_token.expand(b, -1, -1)
+            out = torch.cat([cls_tokens, out], dim=-1)
 
         if self.use_pos_emb:
             if not self.pos_emb:
