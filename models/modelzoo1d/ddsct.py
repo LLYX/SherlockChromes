@@ -84,12 +84,14 @@ class DynamicDepthSeparableConv1dMultiheadAttention(nn.Module):
         heads=8,
         kernel_sizes=[3, 15],
         share_encoder=False,
-        save_attn=False
+        save_attn=False,
+        has_cls_token=False
     ):
         super(DynamicDepthSeparableConv1dMultiheadAttention, self).__init__()
         self.heads = heads
         self.kernel_sizes = kernel_sizes
         self.save_attn = save_attn
+        self.has_cls_token = has_cls_token
 
         # These compute the queries, keys, and values for all
         # heads (as a single concatenated vector)
@@ -110,6 +112,11 @@ class DynamicDepthSeparableConv1dMultiheadAttention(nn.Module):
             c,
             c * heads,
             kernel_sizes=kernel_sizes)
+
+        if self.has_cls_token:
+            self.to_q_cls_embed = nn.Conv1d(c, c * heads, 1)
+            self.to_k_cls_embed = nn.Conv1d(c, c * heads, 1)
+            self.to_v_cls_embed = nn.Conv1d(c, c * heads, 1)
 
         # This unifies the outputs of the different heads into a single
         # c-vector
@@ -144,6 +151,17 @@ class DynamicDepthSeparableConv1dMultiheadAttention(nn.Module):
 
         assert k_l == v_l, 'key and value length must be equal'
 
+        if self.has_cls_token:
+            q_cls_token = self.to_q_cls_embed(q[:, :, 0].unsqueeze(-1))
+            q = q[:, :, 1:]
+            q_l -= 1
+            k_cls_token = self.to_k_cls_embed(k[:, :, 0].unsqueeze(-1))
+            k = k[:, :, 1:]
+            k_l -= 1
+            v_cls_token = self.to_v_cls_embed(v[:, :, 0].unsqueeze(-1))
+            v = v[:, :, 1:]
+            v_l -= 1
+
         queries = self.to_queries(q).view(b, h, c, q_l)
         keys = self.to_keys(k).view(b, h, c, k_l)
         values = self.to_values(v).view(b, h, c, v_l)
@@ -152,6 +170,17 @@ class DynamicDepthSeparableConv1dMultiheadAttention(nn.Module):
         queries = queries.view(b * h, c, q_l)
         keys = keys.view(b * h, c, k_l)
         values = values.view(b * h, c, v_l)
+
+        if self.has_cls_token:
+            q_cls_token = q_cls_token.view(b * h, c, 1)
+            k_cls_token = k_cls_token.view(b * h, c, 1)
+            v_cls_token = v_cls_token.view(b * h, c, 1)
+            queries = torch.cat([q_cls_token, queries], dim=-1)
+            keys = torch.cat([k_cls_token, keys], dim=-1)
+            values = torch.cat([v_cls_token, values], dim=-1)
+            q_l += 1
+            k_l += 1
+            v_l += 1
 
         # Scale and get dot product of queries and keys
         queries = queries / (c ** (1 / 4))
@@ -177,7 +206,7 @@ class DynamicDepthSeparableConv1dMultiheadAttention(nn.Module):
 
         return out
 
-
+# Implement cls_token functionalities for template attention
 class DynamicDepthSeparableConv1dTemplateAttention(nn.Module):
     def __init__(
         self,
@@ -709,8 +738,10 @@ class DDSCTransformer(nn.Module):
             out_dict['attn'] = self.output_aggregator.get_trainable_attn(
                 norm=True)
             out_dict['loc'] = self.to_loc_logits(out)
-        elif self.aggregator_mode == 'embed_multibranch':
-            pass
+        elif self.aggregator_mode == 'cls_embed':
+            out_dict['cla'] = self.to_cla_logits(out[:, :, 0].unsqueeze(-1))
+            out_dict['loc'] = self.to_loc_logits(out[:, :, 1:])
+            out_dict['tkn'] = out[:, :, 0]
         else:
             raise NotImplementedError('invalid pooling method')
 
