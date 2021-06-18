@@ -567,7 +567,7 @@ class DDSCTransformer(nn.Module):
 
         if self.aggregator_mode == 'cls_embed':
             self.cls_token = nn.Parameter(
-                torch.zeros(1, 1, transformer_channels))
+                torch.zeros(1, transformer_channels, 1))
 
         # The sequence of transformer blocks that does all the
         # heavy lifting
