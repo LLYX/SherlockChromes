@@ -25,7 +25,7 @@ class ChromatogramCropper(nn.Module):
         target_len = torch.round(
             l * torch.empty(
                 1).uniform_(self.scale[0], self.scale[1])).int().item()
-        start = torch.randint(low=0, high=l - target_len, size=(1,)).item()
+        start = torch.randint(low=0, high=l - target_len + 1, size=(1,)).item()
         end = start + target_len
         crop = chromatogram_batch[:, :, start:end]
 
