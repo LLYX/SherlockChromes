@@ -10,6 +10,7 @@ class ChromatogramCropper(nn.Module):
         self.size = size
         self.resize = resize
         self.mode = mode
+        self.p = p
     
     def forward(self, chromatogram_batch):
         if torch.rand(1).item() > self.p:
@@ -38,7 +39,6 @@ class ChromatogramJitterer(nn.Module):
         self,
         mz_bins=6,
         augment_precursor=True,
-        length=175,
         mean=0,
         std=1,
         p=0.5,
@@ -46,7 +46,7 @@ class ChromatogramJitterer(nn.Module):
     ):
         super(ChromatogramJitterer, self).__init__()
         self.mz_bins = mz_bins
-        self.length = length
+        self.length = None
         self.mean = mean
         self.std = std
         self.p = p
@@ -59,13 +59,16 @@ class ChromatogramJitterer(nn.Module):
         if torch.rand(1).item() > self.p:
             return chromatogram_batch
 
+        if not self.length:
+            self.length = chromatogram_batch.size()[2]
+
         noise = (
             torch.FloatTensor(
                 self.mz_bins, self.length
             ).normal_(self.mean, self.std)
         ).to(self.device)
 
-        chromatogram_batch[:, 0:self.mz_bins] = (
+        chromatogram_batch[:, 0:self.mz_bins] = F.relu(
             chromatogram_batch[:, 0:self.mz_bins] + noise)
 
         return chromatogram_batch
@@ -255,14 +258,13 @@ class ChromatogramTimeMasker(nn.Module):
         self,
         mz_bins=6,
         augment_precursor=True,
-        length=175,
         T=5,
         m_T=1,
         p=0.5
     ):
         super(ChromatogramTimeMasker, self).__init__()
         self.mz_bins = mz_bins
-        self.tau = length
+        self.tau = None
         self.T = T
         self.m_T = m_T
         self.p = p
@@ -273,6 +275,9 @@ class ChromatogramTimeMasker(nn.Module):
     def forward(self, chromatogram_batch):
         if torch.rand(1).item() > self.p:
             return chromatogram_batch
+        
+        if not self.tau:
+            self.tau = chromatogram_batch.size()[2]
 
         for i in range(self.m_T):
             t = torch.randint(0, self.T + 1, (1,)).item()
@@ -296,7 +301,7 @@ class ChromatogramTraceMasker(nn.Module):
         if self.min_only:
             start = self.mz_bins - self.mz_bins // 6
         else:
-            weights = chromatogram_batch[:, -8:-2, 0].reshape(6)
+            weights = torch.sum(chromatogram_batch[:, -8:-2, 0], dim=0).reshape(6)
             weights_max = torch.max(weights)
             weights = (weights_max - weights) / weights_max
             start = torch.multinomial(weights, 1).item() * self.mz_bins // 6
@@ -359,16 +364,50 @@ class SelfSupervisedLocalAugmentator(nn.Module):
 
 
 class SemiSupervisedStrongAugmentator(nn.Module):
-    def __init__(self):
+    def __init__(self, mz_bins, device, scale, mean, std, num_F, m_F, T, m_T):
         super(SemiSupervisedStrongAugmentator, self).__init__()
+        self.augmentator = nn.Sequential(
+            ChromatogramScaler(
+                mz_bins=mz_bins,
+                scale=scale,
+                device=device
+            ),
+            ChromatogramJitterer(
+                mz_bins=mz_bins,
+                mean=mean,
+                std=std,
+                device=device
+            ),
+            ChromatogramTraceMasker(
+                mz_bins=mz_bins
+            ),
+            ChromatogramSpectraMasker(
+                mz_bins=mz_bins,
+                F=num_F,
+                m_F=m_F
+            ),
+            ChromatogramTimeMasker(
+                mz_bins=mz_bins,
+                T=T,
+                m_T=m_T
+            )
+        )
     
     def forward(self, chromatogram_batch):
-        pass
+        return self.augmentator(chromatogram_batch)
 
 
 class SemiSupervisedWeakAugmentator(nn.Module):
-    def __init__(self):
+    def __init__(self, mz_bins, scale, device):
         super(SemiSupervisedWeakAugmentator, self).__init__()
+        self.augmentator = ChromatogramScaler(
+            mz_bins=mz_bins,
+            augment_precursor=True,
+            scale_independently=False,
+            scale=scale,
+            p=1,
+            device=device
+        )
     
     def forward(self, chromatogram_batch):
-        pass
+        return self.augmentator(chromatogram_batch)
