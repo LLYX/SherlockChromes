@@ -370,11 +370,13 @@ class DynamicDepthSeparableConv1dTransformerBlock(nn.Module):
         share_encoder=False,
         save_attn=False,
         norm_type='layer',
+        pre_norm=True,
         depth_multiplier=4,
         dropout=0.1
     ):
         super(DynamicDepthSeparableConv1dTransformerBlock, self).__init__()
         self.norm_type = norm_type
+        self.pre_norm = pre_norm
 
         self.attention = DynamicDepthSeparableConv1dMultiheadAttention(
             c,
@@ -409,21 +411,37 @@ class DynamicDepthSeparableConv1dTransformerBlock(nn.Module):
 
     def forward(self, q, k=None, v=None):
         out = q
+
+        if self.pre_norm:
+            if self.norm_type == 'layer':
+                q = self.norm1(q.transpose(1, 2)).transpose(1, 2)
+            elif 'instance' in self.norm_type:
+                q = self.norm1(q)
+
         attended = self.attention(q, k, v)
         out = self.dropout(attended) + out
 
-        if self.norm_type == 'layer':
-            out = self.norm1(out.transpose(1, 2)).transpose(1, 2)
-        elif 'instance' in self.norm_type:
-            out = self.norm1(out)
+        if not self.pre_norm:
+            if self.norm_type == 'layer':
+                out = self.norm1(out.transpose(1, 2)).transpose(1, 2)
+            elif 'instance' in self.norm_type:
+                out = self.norm1(out)
 
-        fed_forward = self.feed_forward(out)
+            fed_forward = self.feed_forward(out)
+        else:
+            if self.norm_type == 'layer':
+                fed_forward = self.feed_forward(
+                    self.norm2(out.transpose(1, 2)).transpose(1, 2))
+            elif 'instance' in self.norm_type:
+                fed_forward = self.feed_forward(self.norm2(out))
+
         out = self.dropout(fed_forward) + out
-
-        if self.norm_type == 'layer':
-            out = self.norm2(out.transpose(1, 2)).transpose(1, 2)
-        elif 'instance' in self.norm_type:
-            out = self.norm2(out)
+        
+        if not self.pre_norm:
+            if self.norm_type == 'layer':
+                out = self.norm2(out.transpose(1, 2)).transpose(1, 2)
+            elif 'instance' in self.norm_type:
+                out = self.norm2(out)
 
         return out
 
@@ -525,7 +543,8 @@ class DDSCTransformer(nn.Module):
         kernel_sizes=[3, 15],
         share_encoder=False,
         save_attn=False,
-        norm_type='instance',
+        norm_type='affine_instance',
+        pre_norm=True,
         depth_multiplier=4,
         dropout=0.1,
         use_pos_emb=False,
@@ -535,6 +554,7 @@ class DDSCTransformer(nn.Module):
         aggregator_num_heads=1,
         aggregator_channels=None,
         aggregator_num_layers=3,
+        aggregator_activation='gelu',
         output_num_classes=1,
         output_num_layers=1,
         output_mode='loc',
@@ -581,6 +601,7 @@ class DDSCTransformer(nn.Module):
                     share_encoder=share_encoder,
                     save_attn=save_attn,
                     norm_type=norm_type,
+                    pre_norm=pre_norm,
                     depth_multiplier=depth_multiplier,
                     dropout=dropout))
         self.t_blocks = nn.Sequential(*t_blocks)
@@ -616,7 +637,7 @@ class DDSCTransformer(nn.Module):
                 aggregator_channels,
                 1,
                 num_layers=aggregator_num_layers,
-                activation='relu')
+                activation=aggregator_activation)
 
         if 'embed' in self.aggregator_mode:
             self.to_cla_logits = Conv1dFeedForwardNetwork(
@@ -624,7 +645,7 @@ class DDSCTransformer(nn.Module):
                 t_out_channels,
                 output_num_classes,
                 num_layers=output_num_layers,
-                activation='relu')
+                activation=aggregator_activation)
 
         # Maps the final sequence embeddings to logits
         self.to_loc_logits = Conv1dFeedForwardNetwork(
@@ -632,7 +653,7 @@ class DDSCTransformer(nn.Module):
             t_out_channels,
             output_num_classes,
             num_layers=output_num_layers,
-            activation='relu')
+            activation=aggregator_activation)
 
         # Maps the final logits to probabilities
         if output_num_classes > 1 and not multilabel:
