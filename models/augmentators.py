@@ -11,6 +11,11 @@ class ChromatogramCropper(nn.Module):
         self.resize = resize
         self.mode = mode
         self.p = p
+
+        if self.mode =='linear':
+            self.align_corners = False
+        elif self.mode == 'nearest' or self.mode == 'area':
+            self.align_corners = None
     
     def forward(self, chromatogram_batch):
         if torch.rand(1).item() > self.p:
@@ -29,7 +34,11 @@ class ChromatogramCropper(nn.Module):
                 self.size = l
 
             return F.interpolate(
-                crop, size=self.size, mode=self.mode, align_corners=False)
+                crop,
+                size=self.size,
+                mode=self.mode,
+                align_corners=self.align_corners
+            )
 
         return crop
 
@@ -340,57 +349,86 @@ class ChromatogramTranslator(nn.Module):
 
 
 class SelfSupervisedGlobalAugmentatorOne(nn.Module):
-    def __init__(self):
+    def __init__(self, scale, size, mode, mz_bins, device, mean, std):
         super(SelfSupervisedGlobalAugmentatorOne, self).__init__()
+        self.augmentator = nn.Sequential(
+            ChromatogramCropper(scale=scale, size=size, mode=mode, p=1),
+            ChromatogramScaler(mz_bins=mz_bins, scale=scale, device=device),
+            ChromatogramJitterer(
+                mz_bins=mz_bins,
+                mean=mean,
+                std=std,
+                device=device
+            )
+        )
     
     def forward(self, chromatogram_batch):
-        pass
+        return self.augmentator(chromatogram_batch)
 
 
 class SelfSupervisedGlobalAugmentatorTwo(nn.Module):
-    def __init__(self):
+    def __init__(self, scale, size, mode, mz_bins, num_F, m_F, T, m_T):
         super(SelfSupervisedGlobalAugmentatorTwo, self).__init__()
+        self.augmentator = nn.Sequential(
+            ChromatogramCropper(scale=scale, size=size, mode=mode, p=1),
+            ChromatogramTraceMasker(mz_bins=mz_bins),
+            ChromatogramSpectraMasker(mz_bins=mz_bins, F=num_F, m_F=m_F),
+            ChromatogramTimeMasker(mz_bins=mz_bins, T=T, m_T=m_T)
+        )
     
     def forward(self, chromatogram_batch):
-        pass
+        return self.augmentator(chromatogram_batch)
 
 
 class SelfSupervisedLocalAugmentator(nn.Module):
-    def __init__(self):
+    def __init__(
+        self,
+        scale,
+        size,
+        mode,
+        mz_bins,
+        device,
+        mean,
+        std,
+        num_F,
+        m_F,
+        T,
+        m_T
+    ):
         super(SelfSupervisedLocalAugmentator, self).__init__()
+        self.augmentator = nn.Sequential(
+            ChromatogramCropper(scale=scale, size=size, mode=mode, p=1),
+            ChromatogramScaler(mz_bins=mz_bins, scale=scale, device=device, p=0.8),
+            ChromatogramJitterer(
+                mz_bins=mz_bins,
+                mean=mean,
+                std=std,
+                device=device,
+                p=0.8
+            ),
+            ChromatogramTraceMasker(mz_bins=mz_bins, p=0.2),
+            ChromatogramSpectraMasker(mz_bins=mz_bins, F=num_F, m_F=m_F, p=0.2),
+            ChromatogramTimeMasker(mz_bins=mz_bins, T=T, m_T=m_T, p=0.2)
+        )
     
     def forward(self, chromatogram_batch):
-        pass
+        return self.augmentator(chromatogram_batch)
 
 
 class SemiSupervisedStrongAugmentator(nn.Module):
     def __init__(self, mz_bins, device, scale, mean, std, num_F, m_F, T, m_T):
         super(SemiSupervisedStrongAugmentator, self).__init__()
         self.augmentator = nn.Sequential(
-            ChromatogramScaler(
-                mz_bins=mz_bins,
-                scale=scale,
-                device=device
-            ),
+            ChromatogramScaler(mz_bins=mz_bins, scale=scale, device=device),
             ChromatogramJitterer(
                 mz_bins=mz_bins,
                 mean=mean,
                 std=std,
                 device=device
             ),
-            ChromatogramTraceMasker(
-                mz_bins=mz_bins
-            ),
-            ChromatogramSpectraMasker(
-                mz_bins=mz_bins,
-                F=num_F,
-                m_F=m_F
-            ),
-            ChromatogramTimeMasker(
-                mz_bins=mz_bins,
-                T=T,
-                m_T=m_T
-            )
+            ChromatogramTraceMasker(mz_bins=mz_bins),
+            ChromatogramSpectraMasker(mz_bins=mz_bins, F=num_F, m_F=m_F),
+            ChromatogramTimeMasker(mz_bins=mz_bins, T=T, m_T=m_T)
         )
     
     def forward(self, chromatogram_batch):
@@ -402,8 +440,6 @@ class SemiSupervisedWeakAugmentator(nn.Module):
         super(SemiSupervisedWeakAugmentator, self).__init__()
         self.augmentator = ChromatogramScaler(
             mz_bins=mz_bins,
-            augment_precursor=True,
-            scale_independently=False,
             scale=scale,
             p=1,
             device=device
