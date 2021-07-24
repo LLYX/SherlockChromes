@@ -1,4 +1,3 @@
-import copy
 import numpy as np
 import torch
 import torch.nn as nn
@@ -34,7 +33,6 @@ class SemiSupervisedLearner1d(nn.Module):
         augmentator_m_T=1,
         normalize=False,
         normalization_mode='full',
-        normalization_channels=6,
         regularizer_mode='none',
         regularizer_sigma_min=4,
         regularizer_sigma_max=16,
@@ -49,7 +47,7 @@ class SemiSupervisedLearner1d(nn.Module):
         save_normalized=False
     ):
         super(SemiSupervisedLearner1d, self).__init__()
-        self.model = copy.deepcopy(model)
+        self.model = model
         self.semisupervised = semisupervised
         self.wu = wu
         self.threshold = threshold
@@ -81,7 +79,7 @@ class SemiSupervisedLearner1d(nn.Module):
         if normalize:
             self.normalization_layer = DAIN_Layer(
                 mode=normalization_mode,
-                input_dim=normalization_channels
+                input_dim=model.in_channels
             )
         else:
             self.normalization_layer = nn.Identity()

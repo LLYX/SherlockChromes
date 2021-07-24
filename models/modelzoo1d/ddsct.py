@@ -554,7 +554,7 @@ class DDSCTransformer(nn.Module):
         aggregator_num_heads=1,
         aggregator_channels=None,
         aggregator_num_layers=3,
-        aggregator_activation='gelu',
+        aggregator_activation='relu',
         output_num_classes=1,
         output_num_layers=1,
         output_mode='loc',
@@ -786,6 +786,8 @@ class DDSCTransformer(nn.Module):
             return out_dict['loc']
         elif self.output_mode == 'cla':
             return out_dict['cla']
+        elif self.output_mode == 'tkn':
+            return out_dict['tkn']
         elif self.output_mode == 'attn':
             return out_dict['attn']
         elif self.output_mode == 'all':
