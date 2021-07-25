@@ -1,9 +1,7 @@
 import importlib
 import numpy as np
 import os
-import random
 import scipy.ndimage
-import sys
 import torch
 
 from sklearn.metrics import (
@@ -176,8 +174,7 @@ def train(
         iters, train_loss = 0, 0
         model.train()
 
-        for i, sample in enumerate(labeled_loader):
-            labeled_batch, labels = sample
+        for labeled_batch, labels in labeled_loader:
             unlabeled_batch, _ = next(unlabeled_loader)
             labeled_batch = labeled_batch.to(device=device)
             labels = labels.to(device=device)
@@ -271,9 +268,7 @@ def train(
                     'Recall': recall,
                     'Dice/F1': dice,
                     'IoU/Jaccard': iou,
-                    'Validation Loss': val_loss
-                }
-            )
+                    'Validation Loss': val_loss})
 
         save_path = ''
 

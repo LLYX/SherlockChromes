@@ -55,7 +55,10 @@ def run_experiment(yaml_filepath):
 
     model = create_obj_from_cfg_section(cfg, 'model')
 
-    loss = create_obj_from_cfg_section(cfg, 'loss')
+    if 'loss' in cfg:
+        loss = create_obj_from_cfg_section(cfg, 'loss')
+    else:
+        loss = None
 
     optimizer_kwargs = cfg['optimizer']['kwargs']
 

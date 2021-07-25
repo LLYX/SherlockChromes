@@ -50,10 +50,7 @@ def main(
         if kw in train_kwargs:
             model_kwargs[kw] = train_kwargs[kw]
 
-    model = SemiSupervisedAlignmentLearner1d(
-        model,
-        **model_kwargs)
-
+    model = SemiSupervisedAlignmentLearner1d(model, **model_kwargs)
     optimizer = optim.AdamW(model.parameters(), **optimizer_kwargs)
 
     train(
