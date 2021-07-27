@@ -107,7 +107,7 @@ class MultiCropWrapper1d(nn.Module):
 
 class SelfSupervisedLoss1d(nn.Module):
     def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
-                 warmup_teacher_temp_epochs, nepochs, student_temp=0.1,
+                 warmup_teacher_temp_epochs, max_epochs, student_temp=0.1,
                  center_momentum=0.9):
         super(SelfSupervisedLoss1d, self).__init__()
         self.student_temp = student_temp
@@ -120,7 +120,7 @@ class SelfSupervisedLoss1d(nn.Module):
         self.teacher_temp_schedule = np.concatenate((
             np.linspace(warmup_teacher_temp,
                         teacher_temp, warmup_teacher_temp_epochs),
-            np.ones(nepochs - warmup_teacher_temp_epochs) * teacher_temp))
+            np.ones(max_epochs - warmup_teacher_temp_epochs) * teacher_temp))
 
     @torch.no_grad()
     def update_center(self, teacher_output):
@@ -164,7 +164,7 @@ class SelfSupervisedLoss1d(nn.Module):
 
 
 class SelfSupervisedLearner1d(nn.Module):
-    def __init__(self, model, device='cpu', num_local_crops=8, nepochs=300):
+    def __init__(self, model, device='cpu', num_local_crops=8, max_epochs=300):
         super(SelfSupervisedLearner1d, self).__init__()
         self.global_augmentator_1 = SelfSupervisedGlobalAugmentatorOne(
             scale=(0.6, 1),
@@ -218,7 +218,7 @@ class SelfSupervisedLearner1d(nn.Module):
             warmup_teacher_temp=0.04,
             teacher_temp=0.04,
             warmup_teacher_temp_epochs=30,
-            nepochs=nepochs
+            max_epochs=max_epochs
         )
     
     def forward(self, batch, epoch):

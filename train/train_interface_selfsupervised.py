@@ -18,7 +18,7 @@ def main(
     for kw in [
         'device',
         'num_local_crops',
-        'nepochs'
+        'max_epochs'
     ]:
         if kw in train_kwargs:
             model_kwargs[kw] = train_kwargs[kw]
