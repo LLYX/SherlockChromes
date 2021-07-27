@@ -15,13 +15,14 @@ def main(
         train_kwargs,
         device):
     model_kwargs = {}
+
     for kw in [
         'device',
         'num_local_crops',
         'max_epochs'
     ]:
         if kw in train_kwargs:
-            model_kwargs[kw] = train_kwargs[kw]
+            model_kwargs[kw] = train_kwargs.pop(kw)
 
     model = SelfSupervisedLearner1d(model, **model_kwargs)
     optimizer = train_kwargs.pop('optimizer', None)

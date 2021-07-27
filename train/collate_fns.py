@@ -52,7 +52,6 @@ class PadChromatogramsFor1DCNN(object):
         labels = [item[1] for item in batch]
         label_lengths = [label.size()[0] for label in labels]
         max_label_len = max(label_lengths)
-        label_out_dims = (batch_size, max_label_len)
         padded_labels = torch.zeros(batch_size, max_label_len)
 
         for i, label in enumerate(labels):
