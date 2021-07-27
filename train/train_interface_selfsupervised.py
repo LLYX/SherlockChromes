@@ -22,7 +22,10 @@ def main(
         'max_epochs'
     ]:
         if kw in train_kwargs:
-            model_kwargs[kw] = train_kwargs.pop(kw)
+            if kw == 'device':
+                model_kwargs[kw] = train_kwargs.pop(kw)
+            else:
+                model_kwargs[kw] = train_kwargs[kw]
 
     model = SelfSupervisedLearner1d(model, **model_kwargs)
     optimizer = train_kwargs.pop('optimizer', None)
