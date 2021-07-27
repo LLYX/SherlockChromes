@@ -563,6 +563,7 @@ class DDSCTransformer(nn.Module):
     ):
         super(DDSCTransformer, self).__init__()
         self.save_normalized = save_normalized
+        self.in_channels = in_channels
         self.transformer_channels = transformer_channels
         self.use_pos_emb = use_pos_emb
         self.use_templates = use_templates
@@ -574,7 +575,7 @@ class DDSCTransformer(nn.Module):
         if normalize:
             self.normalization_layer = DAIN_Layer(
                 mode=normalization_mode,
-                input_dim=in_channels)
+                input_dim=self.in_channels)
         else:
             self.normalization_layer = nn.Identity()
 
