@@ -200,7 +200,11 @@ class SelfSupervisedLearner1d(nn.Module):
             LinearFeedForwardNetwork(
                 in_dim=model.transformer_channels,
                 out_dim=4096))
-        self.teacher = copy.deepcopy(self.student)
+        self.teacher = MultiCropWrapper1d(
+            copy.deepcopy(model),
+            LinearFeedForwardNetwork(
+                in_dim=model.transformer_channels,
+                out_dim=4096))
 
         for p in self.teacher.parameters():
             p.requires_grad = False
