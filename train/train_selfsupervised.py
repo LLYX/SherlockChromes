@@ -11,7 +11,7 @@ from datasets.chromatograms_dataset import Subset
 from utils.general_utils import cosine_scheduler
 
 
-def get_data_loaders(
+def get_data_loader(
     data,
     test_batch_proportion=0.1,
     batch_size=1,
@@ -20,7 +20,7 @@ def get_data_loaders(
     outdir_path=None
 ):
     if sampling_fn:
-        unlabeled_idx = sampling_fn(data, test_batch_proportion)
+        unlabeled_idx = sampling_fn(data, test_batch_proportion)[0]
     else:
         raise NotImplementedError
 
@@ -58,7 +58,7 @@ def train(
     device='cpu',
     **kwargs
 ):
-    unlabeled_loader = get_data_loaders(
+    unlabeled_loader = get_data_loader(
         data,
         kwargs['test_batch_proportion'],
         kwargs['batch_size'],
