@@ -34,7 +34,6 @@ def main(
         'augmentator_m_T',
         'normalize',
         'normalization_mode',
-        'normalization_channels',
         'regularizer_mode',
         'regularizer_sigma_min',
         'regularizer_sigma_max',
