@@ -563,6 +563,7 @@ class DDSCTransformer(nn.Module):
     ):
         super(DDSCTransformer, self).__init__()
         self.save_normalized = save_normalized
+        self.transformer_channels = transformer_channels
         self.use_pos_emb = use_pos_emb
         self.use_templates = use_templates
         self.cat_templates = self.use_templates and cat_templates
@@ -579,7 +580,7 @@ class DDSCTransformer(nn.Module):
 
         self.init_encoder = nn.Conv1d(
             in_channels,
-            transformer_channels,
+            self.transformer_channels,
             1)
 
         self.pos_emb = None
@@ -587,7 +588,7 @@ class DDSCTransformer(nn.Module):
 
         if self.aggregator_mode == 'cls_embed':
             self.cls_token = nn.Parameter(
-                torch.zeros(1, transformer_channels, 1))
+                torch.zeros(1, self.transformer_channels, 1))
 
         # The sequence of transformer blocks that does all the
         # heavy lifting
@@ -595,7 +596,7 @@ class DDSCTransformer(nn.Module):
         for i in range(depth):
             t_blocks.append(
                 DynamicDepthSeparableConv1dTransformerBlock(
-                    transformer_channels,
+                    self.transformer_channels,
                     heads=heads,
                     kernel_sizes=kernel_sizes,
                     share_encoder=share_encoder,
@@ -606,12 +607,12 @@ class DDSCTransformer(nn.Module):
                     dropout=dropout))
         self.t_blocks = nn.Sequential(*t_blocks)
 
-        t_out_channels = transformer_channels
+        t_out_channels = self.transformer_channels
 
         if self.use_templates:
             self.templates_attn = (
                 DynamicDepthSeparableConv1dTemplateAttention(
-                    qk_c=transformer_channels,
+                    qk_c=self.transformer_channels,
                     v_c=1,
                     heads=heads,
                     kernel_sizes=kernel_sizes,
