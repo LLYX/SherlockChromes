@@ -131,6 +131,7 @@ class DynamicDepthSeparableConv1dMultiheadAttention(nn.Module):
     def get_attn(self, norm=False):
         if norm:
             return self.norm_attn
+
         return self.attn
 
     def forward(self, q, k=None, v=None):

@@ -179,21 +179,21 @@ class SelfSupervisedLearner1d(nn.Module):
             size=175,
             mode='linear',
             mz_bins=420,
-            num_F=1,
+            num_F=2,
             m_F=42,
-            T=3,
+            T=7,
             m_T=5)
         self.local_augmentator = SelfSupervisedLocalAugmentator(
             scale=(0.2, 0.6),
-            size=175,
+            size=105,
             mode='linear',
             mz_bins=420,
             device=device,
             mean=0,
             std=1,
-            num_F=1,
+            num_F=2,
             m_F=42,
-            T=3,
+            T=2,
             m_T=5)
         self.student = MultiCropWrapper1d(
             model,
