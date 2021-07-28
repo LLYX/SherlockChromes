@@ -179,7 +179,7 @@ class SelfSupervisedLearner1d(nn.Module):
             size=175,
             mode='linear',
             mz_bins=420,
-            num_F=2,
+            num_F=1,
             m_F=42,
             T=7,
             m_T=5)
@@ -191,7 +191,7 @@ class SelfSupervisedLearner1d(nn.Module):
             device=device,
             mean=0,
             std=1,
-            num_F=2,
+            num_F=1,
             m_F=42,
             T=2,
             m_T=5)
