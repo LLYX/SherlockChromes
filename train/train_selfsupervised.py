@@ -161,8 +161,3 @@ def train(
                 torch.save(model, save_path)
             else:
                 torch.save(model.state_dict(), save_path)
-
-    if 'save_whole' in kwargs and kwargs['save_whole']:
-        torch.save(model, save_path)
-    else:
-        torch.save(model.state_dict(), save_path)
