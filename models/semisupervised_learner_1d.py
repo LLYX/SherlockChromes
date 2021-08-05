@@ -1,13 +1,11 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from scipy.ndimage.filters import gaussian_filter1d
 from scipy.special import erfinv
 
 from models.augmentators import SemiSupervisedStrongAugmentator, SemiSupervisedWeakAugmentator
-from models.modelzoo1d.dain import DAIN_Layer
 from optimizers.focal_loss import FocalLossBinary
 
 
@@ -31,8 +29,6 @@ class SemiSupervisedLearner1d(nn.Module):
         augmentator_m_F=1,
         augmentator_T=5,
         augmentator_m_T=1,
-        normalize=False,
-        normalization_mode='full',
         regularizer_mode='none',
         regularizer_sigma_min=4,
         regularizer_sigma_max=16,
@@ -43,8 +39,7 @@ class SemiSupervisedLearner1d(nn.Module):
         loss_logits=False,
         loss_reduction='none',
         model_device='cpu',
-        debug=False,
-        save_normalized=False
+        debug=False
     ):
         super(SemiSupervisedLearner1d, self).__init__()
         self.model = model
@@ -76,14 +71,6 @@ class SemiSupervisedLearner1d(nn.Module):
             m_T=augmentator_m_T
         )
 
-        if normalize:
-            self.normalization_layer = DAIN_Layer(
-                mode=normalization_mode,
-                input_dim=model.in_channels
-            )
-        else:
-            self.normalization_layer = nn.Identity()
-
         self.regularizer_mode = regularizer_mode
         self.regularizer_sigma_min = regularizer_sigma_min
         self.regularizer_sigma_max = regularizer_sigma_max
@@ -98,22 +85,9 @@ class SemiSupervisedLearner1d(nn.Module):
         )
 
         self.debug = debug
-        self.save_normalized = save_normalized
-        self.normalized = None
-
-    def get_normalized(self):
-        return self.normalized
 
     def get_model(self):
-        model = self.model
-
-        if (
-            'normalization_layer' in [n for n, m in model.named_modules()] and
-            isinstance(model.normalization_layer, nn.Identity)
-        ):
-            model.normalization_layer = self.normalization_layer
-
-        return model
+        return self.model
 
     def generate_zebra_mask(
         self,
@@ -139,7 +113,6 @@ class SemiSupervisedLearner1d(nn.Module):
             assert labels is not None, 'missing labels!'
 
             b_ul, c_ul, l_ul = unlabeled_batch.size()
-            labeled_batch = self.normalization_layer(labeled_batch)
 
             if self.regularizer_mode == 'cutmix':
                 if b_ul % 2 != 0:
@@ -192,12 +165,8 @@ class SemiSupervisedLearner1d(nn.Module):
                     torch.norm(attn, p=1, dim=1) * self.sparsity_modulator)
 
             if self.semisupervised:
-                strongly_augmented = self.normalization_layer(
-                    self.strong_augmentator(unlabeled_batch)
-                )
-                weakly_augmented = self.normalization_layer(
-                    self.weak_augmentator(unlabeled_batch)
-                )
+                strongly_augmented = self.strong_augmentator(unlabeled_batch)
+                weakly_augmented = self.weak_augmentator(unlabeled_batch)
 
                 if self.enforce_weak_consistency:
                     self.model.output_mode = 'all'
@@ -388,12 +357,7 @@ class SemiSupervisedLearner1d(nn.Module):
 
             return labeled_loss + self.wu * unlabeled_loss
         else:
-            normalized = self.normalization_layer(unlabeled_batch)
-
-            if self.save_normalized:
-                self.normalized = normalized
-
-            return self.model(normalized)
+            return self.model(unlabeled_batch)
 
 
 # TODO: Update forward to match parent structure
@@ -417,9 +381,6 @@ class SemiSupervisedAlignmentLearner1d(SemiSupervisedLearner1d):
         augmentator_m_F=1,
         augmentator_T=5,
         augmentator_m_T=1,
-        normalize=False,
-        normalization_mode='full',
-        normalization_channels=6,
         regularizer_mode='none',
         regularizer_sigma_min=4,
         regularizer_sigma_max=16,
@@ -430,8 +391,7 @@ class SemiSupervisedAlignmentLearner1d(SemiSupervisedLearner1d):
         loss_logits=False,
         loss_reduction='none',
         model_device='cpu',
-        debug=False,
-        save_normalized=False
+        debug=False
     ):
         super(SemiSupervisedAlignmentLearner1d, self).__init__(
             model,
@@ -451,9 +411,6 @@ class SemiSupervisedAlignmentLearner1d(SemiSupervisedLearner1d):
             augmentator_m_F=augmentator_m_F,
             augmentator_T=augmentator_T,
             augmentator_m_T=augmentator_m_T,
-            normalize=normalize,
-            normalization_mode=normalization_mode,
-            normalization_channels=normalization_channels,
             regularizer_mode=regularizer_mode,
             regularizer_sigma_min=regularizer_sigma_min,
             regularizer_sigma_max=regularizer_sigma_max,
@@ -464,8 +421,7 @@ class SemiSupervisedAlignmentLearner1d(SemiSupervisedLearner1d):
             loss_logits=loss_logits,
             loss_reduction=loss_reduction,
             model_device=model_device,
-            debug=debug,
-            save_normalized=save_normalized
+            debug=debug
         )
 
     def forward(
@@ -477,11 +433,6 @@ class SemiSupervisedAlignmentLearner1d(SemiSupervisedLearner1d):
         labels=None
     ):
         b_ul, c_ul, l_ul = unlabeled_batch.size()
-
-        templates = self.normalization_layer(templates)
-
-        if labeled_batch is not None:
-            labeled_batch = self.normalization_layer(labeled_batch)
 
         if self.training:
             assert labeled_batch is not None, 'missing labeled data!'
@@ -502,15 +453,10 @@ class SemiSupervisedAlignmentLearner1d(SemiSupervisedLearner1d):
 
             self.model.aggregate_output = False
 
-            strongly_augmented = self.normalization_layer(
-                self.strong_augmentator(unlabeled_batch)
-            )
-            weakly_augmented = self.normalization_layer(
-                self.weak_augmentator(unlabeled_batch)
-            )
-            weak_output = self.to_out(
-                self.model(weakly_augmented, templates, template_labels)
-            )
+            strongly_augmented = self.strong_augmentator(unlabeled_batch)
+            weakly_augmented = self.weak_augmentator(unlabeled_batch)
+            weak_output = self.model(
+                weakly_augmented, templates, template_labels)
             pseudo_labels = (weak_output >= 0.5).float()
             quality_modulator = (
                 (weak_output >= self.threshold).float()
@@ -586,10 +532,4 @@ class SemiSupervisedAlignmentLearner1d(SemiSupervisedLearner1d):
 
             return labeled_loss + self.wu * unlabeled_loss
         else:
-            normalized = self.normalization_layer(unlabeled_batch)
-
-            if self.save_normalized:
-                self.normalized = normalized
-
-            return self.to_out(
-                self.model(normalized, templates, template_labels))
+            return self.model(unlabeled_batch, templates, template_labels)

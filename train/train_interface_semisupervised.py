@@ -33,8 +33,6 @@ def main(
         'augmentator_m_F',
         'augmentator_T',
         'augmentator_m_T',
-        'normalize',
-        'normalization_mode',
         'regularizer_mode',
         'regularizer_sigma_min',
         'regularizer_sigma_max',
