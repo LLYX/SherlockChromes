@@ -151,7 +151,7 @@ def train(
                 config=kwargs)
 
     if not optimizer:
-        optimizer = torch.optim.AdamW(model.parameters())
+        optimizer = AdamW(model.parameters())
 
     if not loss:
         loss = FocalLossBinary()
@@ -162,12 +162,11 @@ def train(
     if 'transfer_model_path' in kwargs:
         model.load_state_dict(
             torch.load(kwargs['transfer_model_path']).state_dict(),
-            strict=False)
+            strict=False,
+            map_location=device)
 
     unlabeled_loader = iter(cycle(unlabeled_loader))
-
     highest_bacc, highest_dice, highest_iou, lowest_loss = 0, 0, 0, 100
-
     model.to(device)
 
     for epoch in range(kwargs['max_epochs']):
@@ -186,17 +185,16 @@ def train(
 
             if ('scheduler_step_on_iter' in kwargs and
                 kwargs['scheduler_step_on_iter']):
-                scheduler.step()
+                scheduler.step(epoch + iters / kwargs['max_epochs'])
 
             iters += 1
             iter_loss = loss_out.item()
             train_loss += iter_loss
-
             print(f'Training - Iter: {iters} Iter Loss: {iter_loss:.8f}')
 
         if not ('scheduler_step_on_iter' in kwargs and
                 kwargs['scheduler_step_on_iter']):
-            scheduler.step()
+            scheduler.step(epoch + iters / kwargs['max_epochs'])
 
         train_loss = train_loss / iters
         print(f'Training - Epoch: {epoch} Avg Loss: {train_loss:.8f}')
@@ -239,6 +237,8 @@ def train(
             np.concatenate(outputs_for_metrics, axis=0) >= 0.5).reshape(-1, 1)
         model.model.output_mode = orig_output_mode
         accuracy = accuracy_score(labels_for_metrics, outputs_for_metrics)
+        avg_precision = average_precision_score(
+            labels_for_metrics, outputs_for_metrics)
         bacc = balanced_accuracy_score(labels_for_metrics, outputs_for_metrics)
         precision = precision_score(labels_for_metrics, outputs_for_metrics)
         recall = recall_score(labels_for_metrics, outputs_for_metrics)
@@ -263,6 +263,7 @@ def train(
                 {
                     'Train Loss': train_loss,
                     'Accuracy': accuracy,
+                    'Average Precision': avg_precision,
                     'Balanced Accuracy': bacc,
                     'Precision': precision,
                     'Recall': recall,
@@ -272,47 +273,31 @@ def train(
 
         save_path = ''
 
-        if bacc > highest_bacc:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_bacc={bacc}.pth")
-
-            highest_bacc = bacc
+        if (
+            dice > highest_dice or
+            bacc > highest_bacc or
+            iou > highest_iou or
+            val_loss < lowest_loss
+        ):
+            save_path = f"{kwargs['model_savename']}_linear_{epoch}"
 
             if dice > highest_dice:
+                save_path += f'_dice={dice}'
                 highest_dice = dice
 
+            if bacc > highest_bacc:
+                save_path += f'_bacc={bacc}'
+                highest_bacc = bacc
+
             if iou > highest_iou:
+                save_path += f'_iou={iou}'
                 highest_iou = iou
 
             if val_loss < lowest_loss:
+                save_path += f'_loss={val_loss}'
                 lowest_loss = val_loss
-        elif dice > highest_dice:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_dice={dice}.pth")
 
-            highest_dice = dice
-
-            if iou > highest_iou:
-                highest_iou = iou
-
-            if val_loss < lowest_loss:
-                lowest_loss = val_loss
-        elif iou > highest_iou:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_iou={iou}.pth")
-            highest_iou = iou
-
-            if val_loss < lowest_loss:
-                lowest_loss = val_loss
-        elif val_loss < lowest_loss:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_loss={val_loss}"
-                '.pth')
-            lowest_loss = val_loss
+            save_path = os.path.join(kwargs['outdir_path'], save_path + '.pth')
 
         if save_path:
             if 'save_whole' in kwargs and kwargs['save_whole']:
@@ -444,12 +429,3 @@ def train(
         f'RoI Recall: {recall:.4f} '
         f'Pixel Dice/F1: {dice:.4f} '
         f'Pixel IoU/Jaccard: {iou:.4f}')
-
-    save_path = save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_final.pth")
-
-    if 'save_whole' in kwargs and kwargs['save_whole']:
-        torch.save(model, save_path)
-    else:
-        torch.save(model.state_dict(), save_path)

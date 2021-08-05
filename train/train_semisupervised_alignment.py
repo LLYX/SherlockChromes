@@ -10,6 +10,7 @@ from sklearn.metrics import (
     f1_score,
     jaccard_score
 )
+from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader, Subset
 
@@ -150,7 +151,7 @@ def train(
             kwargs['outdir_path'])
 
     if not optimizer:
-        optimizer = torch.optim.AdamW(model.parameters())
+        optimizer = AdamW(model.parameters())
 
     if not loss:
         loss = FocalLossBinary()
@@ -158,7 +159,8 @@ def train(
     if 'transfer_model_path' in kwargs:
         model.load_state_dict(
             torch.load(kwargs['transfer_model_path']).state_dict(),
-            strict=False)
+            strict=False,
+            map_location=device)
 
     scheduler = CosineAnnealingWarmRestarts(
         optimizer, kwargs['T_0'], T_mult=kwargs['T_mult'])
@@ -166,9 +168,7 @@ def train(
     unlabeled_loader = iter(cycle(unlabeled_loader))
     train_template_loader = iter(cycle(train_template_loader))
     val_template_loader = iter(cycle(val_template_loader))
-
     highest_dice, highest_iou, lowest_loss = 0, 0, 100
-
     model.to(device)
 
     for epoch in range(kwargs['max_epochs']):
@@ -187,7 +187,7 @@ def train(
 
             if ('scheduler_step_on_iter' in kwargs and
                     kwargs['scheduler_step_on_iter']):
-                scheduler.step()
+                scheduler.step(epoch + iters / kwargs['max_epochs'])
 
             optimizer.zero_grad()
 
@@ -206,8 +206,7 @@ def train(
 
         if not ('scheduler_step_on_iter' in kwargs and
                 kwargs['scheduler_step_on_iter']):
-            scheduler.step()
-
+            scheduler.step(epoch + iters / kwargs['max_epochs'])
         print(f'Training - Epoch: {epoch} Avg loss: {(avg_loss / iters):.8f}')
 
         labels_for_metrics = []
@@ -253,44 +252,29 @@ def train(
 
         save_path = ''
 
-        if dice > highest_dice:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_dice={dice}.pth")
+        if (
+            dice > highest_dice or
+            iou > highest_iou or
+            avg_loss < lowest_loss
+        ):
+            save_path = f"{kwargs['model_savename']}_linear_{epoch}"
 
-            highest_dice = dice
+            if dice > highest_dice:
+                save_path += f'_dice={dice}'
+                highest_dice = dice
 
             if iou > highest_iou:
+                save_path += f'_iou={iou}'
                 highest_iou = iou
 
             if avg_loss < lowest_loss:
+                save_path += f'_loss={avg_loss}'
                 lowest_loss = avg_loss
-        elif iou > highest_iou:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_iou={iou}.pth")
-            highest_iou = iou
 
-            if avg_loss < lowest_loss:
-                lowest_loss = avg_loss
-        elif avg_loss < lowest_loss:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_loss={avg_loss}"
-                '.pth')
-            lowest_loss = avg_loss
+            save_path = os.path.join(kwargs['outdir_path'], save_path + '.pth')
 
         if save_path:
             if 'save_whole' in kwargs and kwargs['save_whole']:
                 torch.save(model, save_path)
             else:
                 torch.save(model.state_dict(), save_path)
-
-    save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_final.pth")
-
-    if 'save_whole' in kwargs and kwargs['save_whole']:
-        torch.save(model, save_path)
-    else:
-        torch.save(model.state_dict(), save_path)

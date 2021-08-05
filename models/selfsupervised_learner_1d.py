@@ -8,7 +8,6 @@ from models.augmentators import (
     SelfSupervisedGlobalAugmentatorOne,
     SelfSupervisedGlobalAugmentatorTwo,
     SelfSupervisedLocalAugmentator)
-from models.modelzoo1d.dain import DAIN_Layer
 
 
 class LinearFeedForwardNetwork(nn.Module):
@@ -65,15 +64,8 @@ class LinearFeedForwardNetwork(nn.Module):
 
 
 class MultiCropWrapper1d(nn.Module):
-    def __init__(self, model, head, normalize=True, normalization_mode='full'):
+    def __init__(self, model, head):
         super(MultiCropWrapper1d, self).__init__()
-        if normalize:
-            self.normalization_layer = DAIN_Layer(
-                mode=normalization_mode,
-                input_dim=model.in_channels)
-        else:
-            self.normalization_layer = nn.Identity()
-
         self.model = model
         self.head = head
 
@@ -218,9 +210,14 @@ class SelfSupervisedLearner1d(nn.Module):
             warmup_teacher_temp=0.04,
             teacher_temp=0.04,
             warmup_teacher_temp_epochs=30,
-            max_epochs=max_epochs
-        )
-    
+            max_epochs=max_epochs)
+
+    def return_intermediate_repr(self, batch, use_teacher=True):
+        if use_teacher:
+            return self.teacher.model(batch)
+        
+        return self.student.model(batch)
+
     def forward(self, batch, epoch):
         crops = []
         crops.append(self.global_augmentator_1(batch))
