@@ -158,9 +158,9 @@ def train(
 
     if 'transfer_model_path' in kwargs:
         model.load_state_dict(
-            torch.load(kwargs['transfer_model_path']).state_dict(),
-            strict=False,
-            map_location=device)
+            torch.load(kwargs['transfer_model_path'],
+            map_location=device).state_dict(),
+            strict=False)
 
     scheduler = CosineAnnealingWarmRestarts(
         optimizer, kwargs['T_0'], T_mult=kwargs['T_mult'])

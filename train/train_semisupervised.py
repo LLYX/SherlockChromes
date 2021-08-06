@@ -161,9 +161,9 @@ def train(
 
     if 'transfer_model_path' in kwargs:
         model.load_state_dict(
-            torch.load(kwargs['transfer_model_path']).state_dict(),
-            strict=False,
-            map_location=device)
+            torch.load(kwargs['transfer_model_path'],
+            map_location=device).state_dict(),
+            strict=False)
 
     unlabeled_loader = iter(cycle(unlabeled_loader))
     highest_bacc, highest_dice, highest_iou, lowest_loss = 0, 0, 0, 100

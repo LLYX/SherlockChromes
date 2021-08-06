@@ -150,9 +150,10 @@ def train(
 
     if 'transfer_model_path' in kwargs:
         model.load_state_dict(
-            torch.load(kwargs['transfer_model_path']).state_dict(),
-            strict=False,
-            map_location=device)
+            torch.load(
+                kwargs['transfer_model_path'],
+                map_location=device).state_dict(),
+            strict=False)
 
     lowest_loss = 100
     best_repr_model_savepath = ''
@@ -214,9 +215,8 @@ def train(
 
     # Train linear layer on top of features
     model.load_state_dict(
-        torch.load(best_repr_model_savepath).state_dict(),
-        strict=False,
-        map_location=device)
+        torch.load(best_repr_model_savepath, map_location=device).state_dict(),
+        strict=False)
     model.teacher.model.output_mode = 'tkn'
     linear_classifier = nn.Linear(
         model.teacher.model.transformer_channels, 1).to(device=device)
