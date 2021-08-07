@@ -240,7 +240,8 @@ def train(
             labels = labels.to(device=device)
 
             with torch.no_grad():
-                output = model.return_intermediate_repr(batch)
+                output = linear_classifier(
+                    model.return_intermediate_repr(batch))
 
             optimizer.zero_grad()
             loss_out = loss(output, labels)
@@ -268,7 +269,8 @@ def train(
                 batch = batch.to(device=device)
                 labels = labels.to(device=device)
                 labels_for_metrics.append(labels.cpu().numpy())
-                output = model.return_intermediate_repr(batch)
+                output = linear_classifier(
+                    model.return_intermediate_repr(batch))
                 outputs_for_metrics.append(output.cpu().detach().numpy())
                 loss_out = loss(output, labels).cpu().numpy()
                 losses.append(loss_out)
@@ -359,7 +361,7 @@ def train(
             batch = batch.to(device=device)
             labels = labels.to(device=device)
             labels_for_metrics.append(labels.cpu().numpy())
-            output = model.return_intermediate_repr(batch)
+            output = linear_classifier(model.return_intermediate_repr(batch))
             outputs_for_metrics.append(output.cpu().detach().numpy())
             loss_out = loss(output, labels).cpu().numpy()
             losses.append(loss_out)
