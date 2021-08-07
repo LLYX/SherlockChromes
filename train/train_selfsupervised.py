@@ -240,9 +240,9 @@ def train(
             labels = labels.to(device=device)
 
             with torch.no_grad():
-                output = linear_classifier(
-                    model.return_intermediate_repr(batch))
-
+                output = model.return_intermediate_repr(batch)
+            
+            output = linear_classifier(output)
             optimizer.zero_grad()
             loss_out = loss(output, labels)
             loss_out.backward()
