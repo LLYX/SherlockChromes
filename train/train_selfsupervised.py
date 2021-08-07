@@ -114,16 +114,7 @@ def train(
         sampling_fn,
         collate_fn,
         kwargs['outdir_path'])
-
-    if 'momentum_teacher' not in kwargs:
-        kwargs['momentum_teacher'] = 0.996
-
-    momentum_schedule = cosine_scheduler(
-        kwargs['momentum_teacher'],
-        1,
-        kwargs['max_epochs'],
-        len(unlabeled_loader))
-
+    
     wandb_available = False
 
     if 'visualize' in kwargs and kwargs['visualize']:
@@ -141,82 +132,97 @@ def train(
                 name=wandb.util.generate_id(),
                 job_type='train-selfsupervised-repr',
                 config=kwargs)
-
-    if not optimizer:
-        optimizer = AdamW(model.parameters())
-
-    if not scheduler:
-        scheduler = CosineAnnealingWarmRestarts(optimizer, 10)
-
+    
     if 'transfer_model_path' in kwargs:
         model.load_state_dict(
             torch.load(
                 kwargs['transfer_model_path'],
                 map_location=device).state_dict(),
             strict=False)
-
-    lowest_loss = 100
-    best_repr_model_savepath = ''
+    
+    best_save_path = ''
     model.to(device)
 
-    for epoch in range(kwargs['max_epochs']):
-        iters, train_loss = 0, 0
-        model.train()
+    if 'train_linear_only' not in kwargs:
+        kwargs['train_linear_only'] = False
+        
+    if not kwargs['train_linear_only']:
+        if 'momentum_teacher' not in kwargs:
+            kwargs['momentum_teacher'] = 0.996
 
-        for batch, _ in unlabeled_loader:
-            batch = batch.to(device=device)
-            optimizer.zero_grad()
-            loss_out = model(batch, epoch)
-            loss_out.backward()
-            # implement cancel last layer gradient here
-            # if training loss does not decrease
-            optimizer.step()
+        momentum_schedule = cosine_scheduler(
+            kwargs['momentum_teacher'],
+            1,
+            kwargs['max_epochs'],
+            len(unlabeled_loader))
 
-            with torch.no_grad():
-                m = momentum_schedule[iters]  # momentum parameter
+        if not optimizer:
+            optimizer = AdamW(model.parameters())
 
-                for param_q, param_k in zip(
-                    model.student.parameters(),
-                    model.teacher.parameters()
-                ):
-                    param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+        if not scheduler:
+            scheduler = CosineAnnealingWarmRestarts(optimizer, 10)
 
-            if ('scheduler_step_on_iter' in kwargs and
-                kwargs['scheduler_step_on_iter']):
+        lowest_loss = 100
+
+        for epoch in range(kwargs['max_epochs']):
+            iters, train_loss = 0, 0
+            model.train()
+
+            for batch, _ in unlabeled_loader:
+                batch = batch.to(device=device)
+                optimizer.zero_grad()
+                loss_out = model(batch, epoch)
+                loss_out.backward()
+                # implement cancel last layer gradient here
+                # if training loss does not decrease
+                optimizer.step()
+
+                with torch.no_grad():
+                    m = momentum_schedule[iters]  # momentum parameter
+
+                    for param_q, param_k in zip(
+                        model.student.parameters(),
+                        model.teacher.parameters()
+                    ):
+                        param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+
+                if ('scheduler_step_on_iter' in kwargs and
+                    kwargs['scheduler_step_on_iter']):
+                    scheduler.step(epoch + iters / kwargs['max_epochs'])
+
+                iters += 1
+                iter_loss = loss_out.item()
+                train_loss += iter_loss
+                print(f'Repr Training - Iter: {iters} Iter Loss: {iter_loss:.8f}')
+
+            if not ('scheduler_step_on_iter' in kwargs and
+                    kwargs['scheduler_step_on_iter']):
                 scheduler.step(epoch + iters / kwargs['max_epochs'])
 
-            iters += 1
-            iter_loss = loss_out.item()
-            train_loss += iter_loss
-            print(f'Repr Training - Iter: {iters} Iter Loss: {iter_loss:.8f}')
+            train_loss = train_loss / iters
+            print(f'Repr Training - Epoch: {epoch} Avg Loss: {train_loss:.8f}')
 
-        if not ('scheduler_step_on_iter' in kwargs and
-                kwargs['scheduler_step_on_iter']):
-            scheduler.step(epoch + iters / kwargs['max_epochs'])
+            if wandb_available:
+                wandb.log({'Repr Train Loss': train_loss})
 
-        train_loss = train_loss / iters
-        print(f'Repr Training - Epoch: {epoch} Avg Loss: {train_loss:.8f}')
+            if train_loss < lowest_loss:
+                save_path = os.path.join(
+                    kwargs['outdir_path'],
+                    f"{kwargs['model_savename']}_model_{epoch}_loss={train_loss}"
+                    '.pth')
+                lowest_loss = train_loss
+                best_save_path = save_path
 
-        if wandb_available:
-            wandb.log({'Repr Train Loss': train_loss})
+                if 'save_whole' in kwargs and kwargs['save_whole']:
+                    torch.save(model, save_path)
+                else:
+                    torch.save(model.state_dict(), save_path)
 
-        if train_loss < lowest_loss:
-            save_path = os.path.join(
-                kwargs['outdir_path'],
-                f"{kwargs['model_savename']}_model_{epoch}_loss={train_loss}"
-                '.pth')
-            lowest_loss = train_loss
-            best_repr_model_savepath = save_path
+        # Train linear layer on top of features
+        model.load_state_dict(
+            torch.load(best_save_path, map_location=device).state_dict(),
+            strict=False)
 
-            if 'save_whole' in kwargs and kwargs['save_whole']:
-                torch.save(model, save_path)
-            else:
-                torch.save(model.state_dict(), save_path)
-
-    # Train linear layer on top of features
-    model.load_state_dict(
-        torch.load(best_repr_model_savepath, map_location=device).state_dict(),
-        strict=False)
     model.teacher.model.output_mode = 'tkn'
     linear_classifier = nn.Linear(
         model.teacher.model.transformer_channels, 1).to(device=device)
@@ -332,6 +338,7 @@ def train(
                 lowest_loss = val_loss
 
             save_path = os.path.join(kwargs['outdir_path'], save_path + '.pth')
+            best_save_path = save_path
 
         if save_path:
             if 'save_whole' in kwargs and kwargs['save_whole']:
@@ -343,6 +350,9 @@ def train(
     outputs_for_metrics = []
     losses = []
     highest_bacc, highest_dice, highest_iou, lowest_loss = 0, 0, 0, 100
+    linear_classifier.load_state_dict(
+        torch.load(best_save_path, map_location=device).state_dict(),
+        strict=False)
 
     for batch, labels in test_loader:
         with torch.no_grad():
