@@ -228,7 +228,7 @@ def train(
         model.teacher.model.transformer_channels, 1).to(device=device)
     loss = nn.BCEWithLogitsLoss()
     optimizer = SGD(
-        linear_classifier.parameters(), lr=0.003, momentum=0.9, weight_decay=0)
+        linear_classifier.parameters(), lr=0.0003, momentum=0.9, weight_decay=0)
     scheduler = CosineAnnealingLR(optimizer, 100, eta_min=0)
 
     for epoch in range(100):
