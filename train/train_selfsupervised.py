@@ -117,6 +117,9 @@ def train(
     device='cpu',
     **kwargs
 ):
+    if 'external_path' not in kwargs:
+        kwargs['external_path'] = None
+
     unlabeled_loader, train_loader, val_loader, test_loader = get_data_loaders(
         data,
         kwargs['test_batch_proportion'],
@@ -246,14 +249,21 @@ def train(
         iters, train_loss = 0, 0
         linear_classifier.train()
 
-        for batch, labels, external in train_loader:
+        for sample in train_loader:
+            if len(sample) == 2:
+                batch, labels = sample
+            elif len(sample) == 3:
+                batch, labels, external = sample
+                external = external.to(device=device)
+
             batch = batch.to(device=device)
             labels = labels.to(device=device)
-            external = external.to(device=device)
 
             with torch.no_grad():
                 output = model.return_intermediate_repr(batch)
-                output = torch.cat([output, external], dim=1)
+
+                if len(sample) == 3:
+                    output = torch.cat([output, external], dim=1)
             
             output = linear_classifier(output)
             optimizer.zero_grad()
@@ -277,14 +287,22 @@ def train(
         losses = []
         highest_bacc, highest_dice, highest_iou, lowest_loss = 0, 0, 0, 100
 
-        for batch, labels, external in val_loader:
+        for sample in val_loader:
             with torch.no_grad():
+                if len(sample) == 2:
+                    batch, labels = sample
+                elif len(sample) == 3:
+                    batch, labels, external = sample
+                    external = external.to(device=device)
+
                 batch = batch.to(device=device)
                 labels = labels.to(device=device)
-                external = labels.to(device=device)
                 labels_for_metrics.append(labels.cpu().numpy())
                 output = model.return_intermediate_repr(batch)
-                output = torch.cat([output, external], dim=1)
+
+                if len(sample) == 3:
+                    output = torch.cat([output, external], dim=1)
+
                 output = linear_classifier(output)
                 outputs_for_metrics.append(output.cpu().detach().numpy())
                 loss_out = loss(output, labels).cpu().numpy()
@@ -371,13 +389,22 @@ def train(
         torch.load(best_save_path, map_location=device).state_dict(),
         strict=False)
 
-    for batch, labels, external in test_loader:
+    for sample in test_loader:
         with torch.no_grad():
+            if len(sample) == 2:
+                batch, labels = sample
+            elif len(sample) == 3:
+                batch, labels, external = sample
+                external = external.to(device=device)
+
             batch = batch.to(device=device)
             labels = labels.to(device=device)
             labels_for_metrics.append(labels.cpu().numpy())
             output = model.return_intermediate_repr(batch)
-            output = torch.cat([output, external], dim=1)
+
+            if len(sample) == 3:
+                output = torch.cat([output, external], dim=1)
+
             output = linear_classifier(output)
             outputs_for_metrics.append(output.cpu().detach().numpy())
             loss_out = loss(output, labels).cpu().numpy()
