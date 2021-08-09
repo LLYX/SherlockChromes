@@ -18,13 +18,14 @@ from torch.optim.lr_scheduler import (
     CosineAnnealingLR, CosineAnnealingWarmRestarts)
 from torch.utils.data import DataLoader
 
-from datasets.chromatograms_dataset import Subset
+from datasets.chromatograms_dataset import ExternalDataset, Subset
 from utils.general_utils import cosine_scheduler
 
 
 def get_data_loaders(
     data,
     test_batch_proportion=0.1,
+    external_path=None,
     batch_size=1,
     sampling_fn=None,
     collate_fn=None,
@@ -59,9 +60,18 @@ def get_data_loaders(
             fmt='%i')
 
     unlabeled_set = Subset(data, unlabeled_idx, False)
-    train_set = Subset(data, train_idx, True)
-    val_set = Subset(data, val_idx, True)
-    test_set = Subset(data, test_idx, True)
+
+    if external_path:
+        train_set = ExternalDataset(
+            Subset(data, train_idx, True), external_path)
+        val_set = ExternalDataset(
+            Subset(data, val_idx, True), external_path)
+        test_set = ExternalDataset(
+            Subset(data, test_idx, True), external_path)
+    else:
+        train_set = Subset(data, train_idx, True)
+        val_set = Subset(data, val_idx, True)
+        test_set = Subset(data, test_idx, True)
 
     if collate_fn:
         unlabeled_loader = DataLoader(
@@ -110,6 +120,7 @@ def train(
     unlabeled_loader, train_loader, val_loader, test_loader = get_data_loaders(
         data,
         kwargs['test_batch_proportion'],
+        kwargs['external_path'],
         kwargs['batch_size'],
         sampling_fn,
         collate_fn,
@@ -225,7 +236,7 @@ def train(
 
     model.teacher.model.output_mode = 'tkn'
     linear_classifier = nn.Linear(
-        model.teacher.model.transformer_channels, 1).to(device=device)
+        model.teacher.model.transformer_channels + 7, 1).to(device=device)
     loss = nn.BCEWithLogitsLoss()
     optimizer = SGD(
         linear_classifier.parameters(), lr=0.0003, momentum=0.9, weight_decay=0)
@@ -235,12 +246,14 @@ def train(
         iters, train_loss = 0, 0
         linear_classifier.train()
 
-        for batch, labels in train_loader:
+        for batch, labels, external in train_loader:
             batch = batch.to(device=device)
             labels = labels.to(device=device)
+            external = external.to(device=device)
 
             with torch.no_grad():
                 output = model.return_intermediate_repr(batch)
+                output = torch.cat([output, external], dim=1)
             
             output = linear_classifier(output)
             optimizer.zero_grad()
@@ -264,13 +277,15 @@ def train(
         losses = []
         highest_bacc, highest_dice, highest_iou, lowest_loss = 0, 0, 0, 100
 
-        for batch, labels in val_loader:
+        for batch, labels, external in val_loader:
             with torch.no_grad():
                 batch = batch.to(device=device)
                 labels = labels.to(device=device)
+                external = labels.to(device=device)
                 labels_for_metrics.append(labels.cpu().numpy())
-                output = linear_classifier(
-                    model.return_intermediate_repr(batch))
+                output = model.return_intermediate_repr(batch)
+                output = torch.cat([output, external], dim=1)
+                output = linear_classifier(output)
                 outputs_for_metrics.append(output.cpu().detach().numpy())
                 loss_out = loss(output, labels).cpu().numpy()
                 losses.append(loss_out)
@@ -356,12 +371,14 @@ def train(
         torch.load(best_save_path, map_location=device).state_dict(),
         strict=False)
 
-    for batch, labels in test_loader:
+    for batch, labels, external in test_loader:
         with torch.no_grad():
             batch = batch.to(device=device)
             labels = labels.to(device=device)
             labels_for_metrics.append(labels.cpu().numpy())
-            output = linear_classifier(model.return_intermediate_repr(batch))
+            output = model.return_intermediate_repr(batch)
+            output = torch.cat([output, external], dim=1)
+            output = linear_classifier(output)
             outputs_for_metrics.append(output.cpu().detach().numpy())
             loss_out = loss(output, labels).cpu().numpy()
             losses.append(loss_out)

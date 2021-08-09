@@ -8,6 +8,35 @@ import torch
 from torch.utils.data import Dataset
 
 
+class ExternalDataset(Dataset):
+    """
+    Modify a dataset with additional numpy array.
+
+    Args:
+        dataset (Dataset): The original Dataset.
+        external_path (string): Path to external numpy array.
+    """
+
+    def __init__(self, dataset, external_path):
+        self.dataset = dataset
+        self.external = torch.from_numpy(np.load(external_path)).float()
+    
+    def __getitem__(self, idx):
+        data, labels = self.dataset[idx]
+
+        if hasattr(self.dataset, 'indices'):
+            idx = self.dataset.indices[idx]
+        elif hasattr(self.dataset, 'chromatograms_csv'):
+            idx = self.dataset.chromatograms_csv.iloc[idx, 0]
+
+        external = self.external[idx]
+
+        return data, labels, external
+    
+    def __len__(self):
+        return len(self.dataset)
+
+
 class Subset(Dataset):
     """
     Subset of a dataset at specified indices.
@@ -17,6 +46,7 @@ class Subset(Dataset):
         indices (sequence): Indices in the whole set selected for subset.
         load_weak_labels (bool): Whether to load weak labels or not.
     """
+
     def __init__(self, dataset, indices, load_weak_labels):
         self.dataset = dataset
         self.indices = indices
@@ -255,8 +285,7 @@ class NpyChromatogramsDataset(Dataset):
                 chromatograms_filename,
                 dtype='float32',
                 mode='r',
-                shape=(rows, num_features, cols)
-            )
+                shape=(rows, num_features, cols))
         else:
             self.chromatograms_npy = np.load(chromatograms_filename)
 
@@ -268,8 +297,7 @@ class NpyChromatogramsDataset(Dataset):
                     labels_filename,
                     dtype='float32',
                     mode='r',
-                    shape=(rows, cols)
-                )
+                    shape=(rows, cols))
             else:
                 self.labels = np.load(labels_filename)
         else:
@@ -283,8 +311,7 @@ class NpyChromatogramsDataset(Dataset):
                     weak_labels_filename,
                     dtype='int32',
                     mode='r',
-                    shape=(rows, 1)
-                )
+                    shape=(rows, 1))
             else:
                 self.weak_labels = np.load(weak_labels_filename)
         else:
@@ -315,8 +342,7 @@ class NpyChromatogramsDataset(Dataset):
     def get_bb(self, idx):
         bb_start, bb_end = (
             self.chromatograms_csv.iloc[idx, 5],
-            self.chromatograms_csv.iloc[idx, 6]
-        )
+            self.chromatograms_csv.iloc[idx, 6])
 
         return bb_start, bb_end
 
