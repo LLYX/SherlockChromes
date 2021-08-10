@@ -206,7 +206,7 @@ class SelfSupervisedLearner1d(nn.Module):
 
         self.loss = SelfSupervisedLoss1d(
             out_dim=4096,
-            ncrops= 2 + self.num_local_crops,
+            ncrops=2 + self.num_local_crops,
             warmup_teacher_temp=0.04,
             teacher_temp=0.04,
             warmup_teacher_temp_epochs=30,
