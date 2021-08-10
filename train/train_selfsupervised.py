@@ -107,6 +107,16 @@ def get_data_loaders(
     return unlabeled_loader, train_loader, val_loader, test_loader
 
 
+def normalize_external(x):
+    x_min, _ = torch.min(x, dim=1, keepdim=True)
+    x_max, _ = torch.max(x, dim=1, keepdim=True)
+    x[:, 0:6] = (x[:, 0:6] - x_min) / (x_max - x_min)
+    x_min, x_max = 1, 3
+    x[:, -1:] = (x[:, -1:] - x_min) / (x_max - x_min)
+
+    return x
+
+
 def train(
     data,
     model,
@@ -259,6 +269,7 @@ def train(
             elif len(sample) == 3:
                 batch, labels, external = sample
                 external = external.to(device=device)
+                external = normalize_external(external)
 
             batch = batch.to(device=device)
             labels = labels.to(device=device)
@@ -298,6 +309,7 @@ def train(
                 elif len(sample) == 3:
                     batch, labels, external = sample
                     external = external.to(device=device)
+                    external = normalize_external(external)
 
                 batch = batch.to(device=device)
                 labels = labels.to(device=device)
@@ -400,6 +412,7 @@ def train(
             elif len(sample) == 3:
                 batch, labels, external = sample
                 external = external.to(device=device)
+                external = normalize_external(external)
 
             batch = batch.to(device=device)
             labels = labels.to(device=device)
