@@ -238,8 +238,12 @@ def train(
             strict=False)
 
     model.teacher.model.output_mode = 'tkn'
-    linear_classifier = nn.Linear(
-        model.teacher.model.transformer_channels + 7, 1).to(device=device)
+    embed_dim = model.teacher.model.transformer_channels
+
+    if kwargs['external_path']:
+        embed_dim += 7
+
+    linear_classifier = nn.Linear(embed_dim, 1).to(device=device)
     loss = nn.BCEWithLogitsLoss()
     optimizer = SGD(
         linear_classifier.parameters(), lr=0.0003, momentum=0.9, weight_decay=0)
