@@ -66,7 +66,10 @@ def run_experiment(yaml_filepath):
 
     sampling_fn = create_obj_from_cfg_section(cfg, 'sampling_fn')
 
-    collate_fn = create_obj_from_cfg_section(cfg, 'collate_fn')
+    if 'collate_fn' in cfg:
+        collate_fn = create_obj_from_cfg_section(cfg, 'collate_fn')
+    else:
+        collate_fn = None
 
     train_path = cfg['train']['script_path']
     sys.path.insert(1, os.path.dirname(train_path))
