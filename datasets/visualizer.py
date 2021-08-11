@@ -412,15 +412,23 @@ def test_model(dataset, model, mode='whole'):
         with torch.no_grad():
             dims = chromatogram.shape
 
-            plot_layer_output(
-                torch.from_numpy(
-                    np.asarray(
-                        chromatogram)).view(1, *dims).float(),
-                torch.nn.Sequential(*model.encoder))
+            if model.__class__.__name__ == 'SemiSupervisedLearner1d':
+                plot_layer_output(
+                    torch.from_numpy(
+                        np.asarray(
+                            chromatogram)).view(1, *dims).float(),
+                    torch.nn.Sequential(*model.encoder))
 
-            output = model(
-                torch.from_numpy(
-                    np.asarray(chromatogram)).view(1, *dims).float())[0]
+                output = model(
+                    torch.from_numpy(
+                        np.asarray(chromatogram)).view(1, *dims).float())[0]
+            elif model.__class__.__name__ == 'SelfSupervisedLearner1d':
+                model.teacher.model.t_blocks[-1].attention.save_attn = True
+                model.return_intermediate_repr(
+                    torch.from_numpy(
+                        np.asarray(chromatogram)).view(1, *dims).float())
+                output = model.teacher.model.t_blocks[-1].attention.get_attn()
+                output = output[0, 0, 0]
 
             output = output.numpy()
 
