@@ -428,7 +428,7 @@ def test_model(dataset, model, mode='whole'):
                     torch.from_numpy(
                         np.asarray(chromatogram)).view(1, *dims).float())
                 output = model.teacher.model.t_blocks[-1].attention.get_attn()
-                output = output[0, 0, 0]
+                output = output[0, 0, 0, 1:]
 
             output = output.numpy()
 
