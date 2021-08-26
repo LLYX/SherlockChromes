@@ -1,22 +1,15 @@
 import argparse
 import csv
-import h5py
-import io
 import numpy as np
 import os
 import sqlite3
-import tarfile
 import time
 
 from general_utils import get_subsequence_idxs
 from sql_data_access import SqlDataAccess
 
 
-def get_run_id_from_folder_name(
-    con,
-    cursor,
-    folder_name
-):
+def get_run_id_from_folder_name(cursor, folder_name):
     query = \
         """SELECT ID FROM RUN WHERE FILENAME LIKE '%{0}%'""".format(
             folder_name)
@@ -28,10 +21,7 @@ def get_run_id_from_folder_name(
     return tmp[0][0]
 
 
-def get_mod_seqs_and_charges(
-    con,
-    cursor
-):
+def get_mod_seqs_and_charges(cursor):
     query = \
         """SELECT precursor.ID, peptide.MODIFIED_SEQUENCE, precursor.CHARGE,
         precursor.DECOY
@@ -45,11 +35,7 @@ def get_mod_seqs_and_charges(
     return tmp
 
 
-def get_feature_info_from_run(
-    con,
-    cursor,
-    run_id
-):
+def get_feature_info_from_run(cursor, run_id):
     query = \
         """SELECT p.ID, f.EXP_RT, f.DELTA_RT, f.LEFT_WIDTH, f.RIGHT_WIDTH,
         s.SCORE
@@ -65,11 +51,7 @@ def get_feature_info_from_run(
     return tmp
 
 
-def get_transition_ids_and_library_intensities_from_prec_id(
-    con,
-    cursor,
-    prec_id
-):
+def get_transition_ids_and_library_intensities_from_prec_id(cursor, prec_id):
     query = \
         """SELECT ID, LIBRARY_INTENSITY
         FROM TRANSITION LEFT JOIN TRANSITION_PRECURSOR_MAPPING
@@ -83,7 +65,7 @@ def get_transition_ids_and_library_intensities_from_prec_id(
     return tmp
 
 
-def get_ms2_chromatogram_ids_from_transition_ids(con, cursor, transition_ids):
+def get_ms2_chromatogram_ids_from_transition_ids(cursor, transition_ids):
     sql_query = "SELECT ID FROM CHROMATOGRAM WHERE NATIVE_ID IN ("
 
     for current_id in transition_ids:
@@ -101,7 +83,6 @@ def get_ms2_chromatogram_ids_from_transition_ids(con, cursor, transition_ids):
 
 
 def get_ms1_chromatogram_ids_from_precursor_id_and_isotope(
-    con,
     cursor,
     prec_id,
     isotopes
@@ -154,26 +135,22 @@ def create_data_from_transition_ids(
     sqMass_dir,
     sqMass_filename,
     transition_ids,
-    out,
     chromatogram_filename,
-    left_width,
-    right_width,
+    left_width=None,
+    right_width=None,
     prec_id=None,
     prec_charge=None,
     isotopes=[],
     library_intensities=[],
-    exp_rt=None,
+    lib_rt=None,
     extra_features=[],
     csv_only=False,
-    window_size=175,
-    mode='npy'
+    window_size=175
 ):
     con = sqlite3.connect(os.path.join(sqMass_dir, sqMass_filename))
-
     cursor = con.cursor()
-
     ms2_transition_ids = get_ms2_chromatogram_ids_from_transition_ids(
-        con, cursor, transition_ids)
+        cursor, transition_ids)
 
     if len(ms2_transition_ids) == 0:
         print(f'Skipped {chromatogram_filename}, no transitions found')
@@ -181,20 +158,19 @@ def create_data_from_transition_ids(
         return -1, -1, -1, None
 
     ms2_transition_ids = [item[0] for item in ms2_transition_ids]
-
     transitions = SqlDataAccess(os.path.join(sqMass_dir, sqMass_filename))
-
-    ms2_transitions = transitions.getDataForChromatograms(
-        ms2_transition_ids)
-
+    ms2_transitions = transitions.getDataForChromatograms(ms2_transition_ids)
     times = ms2_transitions[0][0]
     len_times = len(times)
     subsection_left, subsection_right = 0, len_times
 
-    row_labels, bb_start, bb_end = get_chromatogram_labels_and_bbox(
-            left_width,
-            right_width,
-            times)
+    if left_width and right_width:
+        row_labels, bb_start, bb_end = get_chromatogram_labels_and_bbox(
+                left_width,
+                right_width,
+                times)
+    else:
+        row_labels = None, 'NA', 'NA'
 
     if not csv_only:
         num_expected_features = 6
@@ -207,7 +183,7 @@ def create_data_from_transition_ids(
         if 'lib_int' in extra_features:
             num_expected_extra_features += 6
 
-        if 'exp_rt' in extra_features:
+        if 'dist_rt' in extra_features:
             num_expected_extra_features += 1
 
         if 'prec_charge' in extra_features:
@@ -215,7 +191,6 @@ def create_data_from_transition_ids(
 
         chromatogram = np.zeros((num_expected_features, len_times))
         extra = np.zeros((num_expected_extra_features, len_times))
-
         ms2_transitions = np.array(
             [transition[1] for transition in ms2_transitions])
 
@@ -229,13 +204,10 @@ def create_data_from_transition_ids(
         if 'ms1' in extra_features:
             ms1_transition_ids = \
                 get_ms1_chromatogram_ids_from_precursor_id_and_isotope(
-                    con, cursor, prec_id, isotopes)
-
+                    cursor, prec_id, isotopes)
             ms1_transition_ids = [item[0] for item in ms1_transition_ids]
-
             ms1_transitions = transitions.getDataForChromatograms(
                 ms1_transition_ids)
-
             ms1_transitions = np.array(
                 [transition[1] for transition in ms1_transitions])
 
@@ -244,13 +216,10 @@ def create_data_from_transition_ids(
             elif ms1_transitions.shape[1] < len_times:
                 padding = np.zeros((
                     ms1_transitions.shape[0],
-                    len_times - ms1_transitions.shape[1]
-                ))
-
+                    len_times - ms1_transitions.shape[1]))
                 ms1_transitions = np.concatenate(
                     (ms1_transitions, padding),
-                    axis=1
-                )
+                    axis=1)
 
             extra[free_idx:free_idx + ms1_transitions.shape[0]] = (
                 ms1_transitions)
@@ -262,19 +231,17 @@ def create_data_from_transition_ids(
             lib_int_features = np.repeat(
                 library_intensities,
                 len_times).reshape(len(library_intensities), len_times)
-
             extra[free_idx:free_idx + lib_int_features.shape[0]] = (
                 lib_int_features)
             extra_meta['lib_int_start'] = free_idx
             free_idx += 6
             extra_meta['lib_int_end'] = free_idx
 
-        if 'exp_rt' in extra_features:
-            dist_from_exp_rt = np.absolute(
-                np.repeat(exp_rt, len_times) - np.array(times))
-
-            extra[free_idx:free_idx + 1] = dist_from_exp_rt
-            extra_meta['exp_rt'] = free_idx
+        if 'dist_rt' in extra_features:
+            dist_from_lib_rt = np.absolute(
+                np.repeat(lib_rt, len_times) - np.array(times))
+            extra[free_idx:free_idx + 1] = dist_from_lib_rt
+            extra_meta['lib_rt'] = free_idx
             free_idx += 1
 
         if 'prec_charge' in extra_features:
@@ -283,12 +250,22 @@ def create_data_from_transition_ids(
             free_idx += 1
 
         if window_size >= 0:
-            subsection_left, subsection_right = get_subsequence_idxs(
-                times, exp_rt, window_size)
+            if lib_rt:
+                subsection_left, subsection_right = get_subsequence_idxs(
+                    times, lib_rt, window_size)
+            else:
+                mid = times.shape[0] // 2
+                subsection_left = mid - window_size // 2
+                subsection_right = mid + window_size // 2
+
+                if window_size % 2 != 0:
+                    subsection_right += 1
 
             chromatogram = chromatogram[:, subsection_left:subsection_right]
             extra = extra[:, subsection_left:subsection_right]
-            row_labels = row_labels[subsection_left:subsection_right]
+
+            if left_width and right_width:
+                row_labels = row_labels[subsection_left:subsection_right]
 
             if chromatogram.shape[1] != window_size:
                 print(f'Skipped {chromatogram_filename}, misshapen matrix')
@@ -298,62 +275,35 @@ def create_data_from_transition_ids(
                 print(f'Skipped {chromatogram_filename}, misshapen matrix')
 
                 return -1, -1, -1, None
-            elif len(row_labels) != window_size:
+            
+            if left_width and right_width and len(row_labels) != window_size:
                 print(f'Skipped {chromatogram_filename}, misshapen matrix')
 
                 return -1, -1, -1, None
 
-            label_idxs = np.where(row_labels == 1)[0]
+            if left_width and right_width:
+                label_idxs = np.where(row_labels == 1)[0]
 
-            if len(label_idxs) > 0:
-                bb_start, bb_end = label_idxs[0], label_idxs[-1]
-            else:
-                bb_start, bb_end = None, None
+                if len(label_idxs) > 0:
+                    bb_start, bb_end = label_idxs[0], label_idxs[-1]
 
-        if mode == 'npy':
-            chromatogram = np.concatenate((chromatogram, extra), axis=0)
+        chromatogram = np.concatenate((chromatogram, extra), axis=0)
 
-            return row_labels, bb_start, bb_end, chromatogram
-        elif mode == 'hdf5':
-            out.create_dataset(chromatogram_filename, data=chromatogram)
-
-            if extra_features:
-                extra_dset = out.create_dataset(
-                    chromatogram_filename + '_Extra', data=extra)
-
-                for feature in extra_meta:
-                    extra_dset.attrs[feature] = extra_meta[feature]
-        elif mode == 'tar':
-            data = chromatogram.tobytes()
-            with io.BytesIO(data) as f:
-                info = tarfile.TarInfo(chromatogram_filename)
-                info.size = len(data)
-                out.addfile(info, f)
-
-            if extra_features:
-                data = extra.tobytes()
-                with io.BytesIO(data) as f:
-                    info = tarfile.TarInfo(chromatogram_filename + '_Extra')
-                    info.size = len(data)
-                    out.addfile(info, f)
-
-    return row_labels, bb_start, bb_end, None
-
+        return row_labels, bb_start, bb_end, chromatogram
 
 def get_cnn_data(
     out,
     osw_dir='.',
     osw_filename='merged.osw',
     sqMass_roots=[],
-    extra_features=['ms1', 'lib_int', 'exp_rt', 'prec_charge'],
+    extra_features=['ms1', 'lib_int', 'lib_rt', 'prec_charge'],
     isotopes=[0],
     csv_only=False,
     window_size=201,
-    use_rt=False,
-    scored=False,
-    mode='npy'
+    use_lib_rt=False,
+    scored=False
 ):
-    label_matrix, chromatograms_array, chromatograms_csv = [], [], []
+    segmentation_labels_matrix, chromatograms_array, chromatograms_csv = [], [], []
 
     chromatogram_id = 0
 
@@ -364,16 +314,16 @@ def get_cnn_data(
             con,
             cursor)
 
-    labels_filename = f'{out}_osw_labels_array'
+    labels_filename = f'{out}_osw_segmentation_labels_array'
     chromatograms_filename = f'{out}_chromatograms_array'
     csv_filename = f'{out}_chromatograms_csv.csv'
 
     for sqMass_root in sqMass_roots:
         print(sqMass_root)
 
-        run_id = get_run_id_from_folder_name(con, cursor, sqMass_root)
+        run_id = get_run_id_from_folder_name(cursor, sqMass_root)
 
-        if use_rt and scored:
+        if use_lib_rt and scored:
             feature_info = get_feature_info_from_run(
                 con,
                 cursor,
@@ -401,76 +351,67 @@ def get_cnn_data(
             library_intensities = \
                 [x[1] for x in transition_ids_and_library_intensities]
 
-            if use_rt and scored:
+            if scored:
                 prec_id_2, exp_rt, delta_rt, left_width, right_width, score = (
                     feature_info[i])
 
                 assert prec_id == prec_id_2, print(prec_id, prec_id_2)
 
-                if exp_rt and delta_rt:
-                    exp_rt = exp_rt - delta_rt
-                else:
-                    print(
-                        f'Skipped {chromatograms_filename} due to missing rt')
+                if use_lib_rt:
+                    if exp_rt and delta_rt:
+                        lib_rt = exp_rt - delta_rt
+                    else:
+                        print(
+                            f'Skipped {chromatograms_filename} due to missing rt')
 
-                    continue
+                        continue
             else:
-                assert window_size == -1, print(
-                    'Cannot subset without using library RT!')
-
-            if not scored:
-                # TODO: Implement extraction of OSW features only
-                exp_rt, left_width, right_width, score = None, None, None, None
-                bb_start, bb_end = None, None
+                lib_rt, left_width, right_width, score = None, None, None, 'NA'
 
             repl_name = sqMass_root
-
             chromatogram_filename = [repl_name, prec_mod_seq, str(prec_charge)]
+
             if decoy == 1:
                 chromatogram_filename.insert(0, 'DECOY')
 
             chromatogram_filename = '_'.join(chromatogram_filename)
+            (
+                labels,
+                bb_start,
+                bb_end,
+                chromatogram) = create_data_from_transition_ids(
+                sqMass_root,
+                'output.sqMass',
+                transition_ids,
+                chromatogram_filename,
+                left_width=left_width,
+                right_width=right_width,
+                prec_id=prec_id,
+                prec_charge=prec_charge,
+                isotopes=isotopes,
+                library_intensities=library_intensities,
+                lib_rt=lib_rt,
+                extra_features=extra_features,
+                csv_only=csv_only,
+                window_size=window_size)
 
-            if scored:
-                (
-                    labels,
-                    bb_start,
-                    bb_end,
-                    chromatogram) = create_data_from_transition_ids(
-                    sqMass_root,
-                    'output.sqMass',
-                    transition_ids,
-                    out,
-                    chromatogram_filename,
-                    left_width,
-                    right_width,
-                    prec_id=prec_id,
-                    prec_charge=prec_charge,
-                    isotopes=isotopes,
-                    library_intensities=library_intensities,
-                    exp_rt=exp_rt,
-                    extra_features=extra_features,
-                    csv_only=csv_only,
-                    window_size=window_size,
-                    mode=mode)
+            if scored and not isinstance(labels, np.ndarray):
+                continue
 
-                if not isinstance(labels, np.ndarray):
-                    continue
+            if not isinstance(chromatogram, np.ndarray):
+                continue
 
-                if not isinstance(chromatogram, np.ndarray):
-                    continue
-
-                chromatograms_array.append(chromatogram)
+            chromatograms_array.append(chromatogram)
 
             if not csv_only and scored:
-                label_matrix.append(labels)
+                segmentation_labels_matrix.append(labels)
 
             chromatograms_csv.append(
                 [
                     chromatogram_id,
                     chromatogram_filename,
                     prec_id,
-                    exp_rt,
+                    lib_rt,
                     window_size,
                     bb_start,
                     bb_end,
@@ -479,23 +420,15 @@ def get_cnn_data(
 
     con.close()
 
-    if not csv_only and scored:
-        if mode == 'npy':
-            np.save(
-                chromatograms_filename,
-                np.array(chromatograms_array, dtype=np.float32))
+    if not csv_only:
+        np.save(
+            chromatograms_filename,
+            np.array(chromatograms_array, dtype=np.float32))
+
+        if scored:
             np.save(
                 labels_filename,
-                np.array(label_matrix, dtype=np.float32))
-        elif mode == 'hdf5':
-            out.create_dataset(
-                labels_filename, data=np.array(label_matrix))
-        elif mode == 'tar':
-            data = np.array(label_matrix).tobytes()
-            with io.BytesIO(data) as f:
-                info = tarfile.TarInfo(labels_filename)
-                info.size = len(data)
-                out.addfile(info, f)
+                np.array(segmentation_labels_matrix, dtype=np.float32))
 
     with open(csv_filename, 'w', newline='') as f:
         writer = csv.writer(f)
@@ -508,9 +441,7 @@ def get_cnn_data(
                 'Window Size',
                 'External Label Left IDX',
                 'External Label Right IDX',
-                'External Score'
-            ]
-        )
+                'External Score'])
         writer.writerows(chromatograms_csv)
 
 
@@ -531,17 +462,17 @@ if __name__ == '__main__':
         '-extra_features',
         '--extra_features',
         type=str,
-        default='ms1,lib_int,exp_rt,prec_charge')
+        default='ms1,lib_int,dist_rt,prec_charge')
     parser.add_argument('-isotopes', '--isotopes', type=str, default='0')
     parser.add_argument(
         '-csv_only',
         '--csv_only',
         action='store_true',
         default=False)
-    parser.add_argument('-window_size', '--window_size', type=int, default=201)
+    parser.add_argument('-window_size', '--window_size', type=int, default=175)
     parser.add_argument(
-        '-use_rt',
-        '--use_rt',
+        '-use_lib_rt',
+        '--use_lib_rt',
         action='store_true',
         default=False)
     parser.add_argument(
@@ -549,7 +480,6 @@ if __name__ == '__main__':
         '--scored',
         action='store_true',
         default=False)
-    parser.add_argument('-mode', '--mode', type=str, default='npy')
     args = parser.parse_args()
 
     args.in_folder = args.in_folder.split(',')
@@ -561,12 +491,7 @@ if __name__ == '__main__':
     out = None
 
     if not args.csv_only:
-        if args.mode == 'npy':
-            out = args.out
-        elif args.mode == 'hdf5':
-            out = h5py.File(args.out + '.hdf5', 'w')
-        elif args.mode == 'tar':
-            out = tarfile.open(args.out + '.tar', 'w|')
+        out = args.out
 
     get_cnn_data(
         out=out,
@@ -577,8 +502,7 @@ if __name__ == '__main__':
         isotopes=args.isotopes,
         csv_only=args.csv_only,
         window_size=args.window_size,
-        use_rt=args.use_rt,
-        scored=args.scored,
-        mode=args.mode)
+        use_lib_rt=args.use_lib_rt,
+        scored=args.scored)
 
     print('It took {0:0.1f} seconds'.format(time.time() - start))
