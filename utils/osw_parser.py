@@ -314,9 +314,7 @@ def get_cnn_data(
     con = sqlite3.connect(os.path.join(osw_dir, osw_filename))
     cursor = con.cursor()
 
-    prec_id_and_prec_mod_seqs_and_charges = get_mod_seqs_and_charges(
-            con,
-            cursor)
+    prec_id_and_prec_mod_seqs_and_charges = get_mod_seqs_and_charges(cursor)
 
     labels_filename = f'{out}_osw_segmentation_labels_array'
     chromatograms_filename = f'{out}_chromatograms_array'
@@ -328,10 +326,7 @@ def get_cnn_data(
         run_id = get_run_id_from_folder_name(cursor, sqMass_root)
 
         if use_lib_rt and scored:
-            feature_info = get_feature_info_from_run(
-                con,
-                cursor,
-                run_id)
+            feature_info = get_feature_info_from_run(cursor, run_id)
 
             assert len(
                 prec_id_and_prec_mod_seqs_and_charges) == len(
@@ -347,7 +342,6 @@ def get_cnn_data(
 
             transition_ids_and_library_intensities = (
                 get_transition_ids_and_library_intensities_from_prec_id(
-                    con,
                     cursor,
                     prec_id))
             transition_ids = \
