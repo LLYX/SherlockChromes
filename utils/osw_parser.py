@@ -324,15 +324,13 @@ def get_cnn_data(
         print(sqMass_root)
 
         run_id = get_run_id_from_folder_name(cursor, sqMass_root)
+        feature_info = get_feature_info_from_run(cursor, run_id)
 
-        if use_lib_rt and scored:
-            feature_info = get_feature_info_from_run(cursor, run_id)
-
-            assert len(
-                prec_id_and_prec_mod_seqs_and_charges) == len(
-                    feature_info), print(
-                        len(prec_id_and_prec_mod_seqs_and_charges),
-                        len(feature_info))
+        assert len(
+            prec_id_and_prec_mod_seqs_and_charges) == len(
+                feature_info), print(
+                    len(prec_id_and_prec_mod_seqs_and_charges),
+                    len(feature_info))
 
         for i in range(len(prec_id_and_prec_mod_seqs_and_charges)):
             print(i)
