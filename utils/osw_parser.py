@@ -238,6 +238,10 @@ def create_data_from_transition_ids(
             extra_meta['lib_int_end'] = free_idx
 
         if 'dist_rt' in extra_features:
+            if not lib_rt:
+                mid = times.shape[0] // 2
+                lib_rt = times[mid]
+
             dist_from_lib_rt = np.absolute(
                 np.repeat(lib_rt, len_times) - np.array(times))
             extra[free_idx:free_idx + 1] = dist_from_lib_rt
@@ -365,6 +369,8 @@ def get_cnn_data(
                             f'Skipped {chromatograms_filename} due to missing rt')
 
                         continue
+                else:
+                    lib_rt = None
             else:
                 lib_rt, left_width, right_width, score = None, None, None, 'NA'
 
