@@ -239,7 +239,7 @@ def create_data_from_transition_ids(
 
         if 'dist_rt' in extra_features:
             if not lib_rt:
-                mid = times.shape[0] // 2
+                mid = len(times) // 2
                 lib_rt = times[mid]
 
             dist_from_lib_rt = np.absolute(
@@ -258,7 +258,7 @@ def create_data_from_transition_ids(
                 subsection_left, subsection_right = get_subsequence_idxs(
                     times, lib_rt, window_size)
             else:
-                mid = times.shape[0] // 2
+                mid = len(times) // 2
                 subsection_left = mid - window_size // 2
                 subsection_right = mid + window_size // 2
 
