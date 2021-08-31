@@ -272,16 +272,22 @@ def create_data_from_transition_ids(
                 row_labels = row_labels[subsection_left:subsection_right]
 
             if chromatogram.shape[1] != window_size:
-                print(f'Skipped {chromatogram_filename}, misshapen matrix')
+                print(
+                    f'Skipped {chromatogram_filename}, misshapen matrix '
+                    f'of shape {chromatogram.shape}')
 
                 return -1, -1, -1, None
             elif extra.shape[1] != window_size:
-                print(f'Skipped {chromatogram_filename}, misshapen matrix')
+                print(
+                    f'Skipped {chromatogram_filename}, misshapen matrix '
+                    f'of shape {extra.shape}')
 
                 return -1, -1, -1, None
             
             if left_width and right_width and len(row_labels) != window_size:
-                print(f'Skipped {chromatogram_filename}, misshapen matrix')
+                print(
+                    f'Skipped {chromatogram_filename}, misshapen matrix '
+                    f'of shape {row_labels.shape}')
 
                 return -1, -1, -1, None
 
