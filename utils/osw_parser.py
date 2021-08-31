@@ -308,14 +308,10 @@ def get_cnn_data(
     scored=False
 ):
     segmentation_labels_matrix, chromatograms_array, chromatograms_csv = [], [], []
-
     chromatogram_id = 0
-
     con = sqlite3.connect(os.path.join(osw_dir, osw_filename))
     cursor = con.cursor()
-
     prec_id_and_prec_mod_seqs_and_charges = get_mod_seqs_and_charges(cursor)
-
     labels_filename = f'{out}_osw_segmentation_labels_array'
     chromatograms_filename = f'{out}_chromatograms_array'
     csv_filename = f'{out}_chromatograms_csv.csv'
@@ -337,7 +333,6 @@ def get_cnn_data(
 
             prec_id, prec_mod_seq, prec_charge, decoy = (
                 prec_id_and_prec_mod_seqs_and_charges[i])
-
             transition_ids_and_library_intensities = (
                 get_transition_ids_and_library_intensities_from_prec_id(
                     cursor,
