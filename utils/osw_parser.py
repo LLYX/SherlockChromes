@@ -170,7 +170,7 @@ def create_data_from_transition_ids(
                 right_width,
                 times)
     else:
-        row_labels = None, 'NA', 'NA'
+        row_labels, bb_start, bb_end = None, 'NA', 'NA'
 
     if not csv_only:
         num_expected_features = 6
