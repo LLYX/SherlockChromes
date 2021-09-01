@@ -194,7 +194,12 @@ def create_data_from_transition_ids(
         ms2_transitions = np.array(
             [transition[1] for transition in ms2_transitions])
 
-        assert ms2_transitions.shape[1] > 1, print(chromatogram_filename)
+        if not ms2_transitions.shape[1] > 0:
+            print(
+                f'Skipped {chromatogram_filename}, misshapen ms2 transition '
+                f'matrix of size {ms2_transitions.shape}')
+
+            return -1, -1, -1, None
 
         chromatogram[0:ms2_transitions.shape[0]] = ms2_transitions
 
