@@ -98,7 +98,9 @@ def get_ms1_chromatogram_ids_from_precursor_id_and_isotope(
     res = cursor.execute(sql_query)
     tmp = res.fetchall()
 
-    assert len(tmp) > 0, str(prec_id) + ' ' + str(isotope)
+    if not len(tmp) > 0:
+        print(f'{prec_id} {isotopes}')
+        tmp = None
 
     return tmp
 
@@ -153,9 +155,9 @@ def create_data_from_transition_ids(
         cursor, transition_ids)
 
     if len(ms2_transition_ids) == 0:
-        print(f'Skipped {chromatogram_filename}, no transitions found')
+        print(f'Skipped {chromatogram_filename}, no ms2 transitions')
 
-        return -1, -1, -1, None
+        return None, -1, -1, None
 
     ms2_transition_ids = [item[0] for item in ms2_transition_ids]
     transitions = SqlDataAccess(os.path.join(sqMass_dir, sqMass_filename))
@@ -199,7 +201,7 @@ def create_data_from_transition_ids(
                 f'Skipped {chromatogram_filename}, misshapen ms2 transition '
                 f'matrix of size {ms2_transitions.shape}')
 
-            return -1, -1, -1, None
+            return None, -1, -1, None
 
         chromatogram[0:ms2_transitions.shape[0]] = ms2_transitions
 
@@ -210,6 +212,13 @@ def create_data_from_transition_ids(
             ms1_transition_ids = \
                 get_ms1_chromatogram_ids_from_precursor_id_and_isotope(
                     cursor, prec_id, isotopes)
+            
+            if ms1_transition_ids is None:
+                print(
+                    f'Skipped {chromatogram_filename}, no ms1 transitions')
+                
+                return None, -1, -1, None
+
             ms1_transition_ids = [item[0] for item in ms1_transition_ids]
             ms1_transitions = transitions.getDataForChromatograms(
                 ms1_transition_ids)
@@ -281,20 +290,20 @@ def create_data_from_transition_ids(
                     f'Skipped {chromatogram_filename}, misshapen chromatogram '
                     f'matrix of shape {chromatogram.shape}')
 
-                return -1, -1, -1, None
+                return None, -1, -1, None
             elif extra.shape[1] != window_size:
                 print(
                     f'Skipped {chromatogram_filename}, misshapen extra matrix '
                     f'of shape {extra.shape}')
 
-                return -1, -1, -1, None
+                return None, -1, -1, None
             
             if left_width and right_width and len(row_labels) != window_size:
                 print(
                     f'Skipped {chromatogram_filename}, misshapen label matrix '
                     f'of shape {row_labels.shape}')
 
-                return -1, -1, -1, None
+                return None, -1, -1, None
 
             if left_width and right_width:
                 label_idxs = np.where(row_labels == 1)[0]
