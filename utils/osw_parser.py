@@ -157,7 +157,7 @@ def create_data_from_transition_ids(
     if len(ms2_transition_ids) == 0:
         print(f'Skipped {chromatogram_filename}, no ms2 transitions')
 
-        return None, -1, -1, None
+        return None, -1, -1, None, None
 
     ms2_transition_ids = [item[0] for item in ms2_transition_ids]
     transitions = SqlDataAccess(os.path.join(sqMass_dir, sqMass_filename))
@@ -201,7 +201,7 @@ def create_data_from_transition_ids(
                 f'Skipped {chromatogram_filename}, misshapen ms2 transition '
                 f'matrix of size {ms2_transitions.shape}')
 
-            return None, -1, -1, None
+            return None, -1, -1, None, None
 
         chromatogram[0:ms2_transitions.shape[0]] = ms2_transitions
 
@@ -217,7 +217,7 @@ def create_data_from_transition_ids(
                 print(
                     f'Skipped {chromatogram_filename}, no ms1 transitions')
                 
-                return None, -1, -1, None
+                return None, -1, -1, None, None
 
             ms1_transition_ids = [item[0] for item in ms1_transition_ids]
             ms1_transitions = transitions.getDataForChromatograms(
@@ -291,20 +291,20 @@ def create_data_from_transition_ids(
                     f'Skipped {chromatogram_filename}, misshapen chromatogram '
                     f'matrix of shape {chromatogram.shape}')
 
-                return None, -1, -1, None
+                return None, -1, -1, None, None
             elif extra.shape[1] != window_size:
                 print(
                     f'Skipped {chromatogram_filename}, misshapen extra matrix '
                     f'of shape {extra.shape}')
 
-                return None, -1, -1, None
+                return None, -1, -1, None, None
             
             if left_width and right_width and len(row_labels) != window_size:
                 print(
                     f'Skipped {chromatogram_filename}, misshapen label matrix '
                     f'of shape {row_labels.shape}')
 
-                return None, -1, -1, None
+                return None, -1, -1, None, None
 
             if left_width and right_width:
                 label_idxs = np.where(row_labels == 1)[0]
