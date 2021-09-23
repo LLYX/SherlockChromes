@@ -281,6 +281,7 @@ def create_data_from_transition_ids(
 
             chromatogram = chromatogram[:, subsection_left:subsection_right]
             extra = extra[:, subsection_left:subsection_right]
+            times = times[subsection_left:subsection_right]
 
             if left_width and right_width:
                 row_labels = row_labels[subsection_left:subsection_right]
@@ -313,7 +314,7 @@ def create_data_from_transition_ids(
 
         chromatogram = np.concatenate((chromatogram, extra), axis=0)
 
-        return row_labels, bb_start, bb_end, chromatogram
+        return row_labels, bb_start, bb_end, chromatogram, times
 
 def get_cnn_data(
     out,
@@ -327,13 +328,18 @@ def get_cnn_data(
     use_lib_rt=False,
     scored=False
 ):
-    segmentation_labels_matrix, chromatograms_array, chromatograms_csv = [], [], []
+    (
+        segmentation_labels_array,
+        chromatograms_array,
+        times_array,
+        chromatograms_csv) = [], [], [], []
     chromatogram_id = 0
     con = sqlite3.connect(os.path.join(osw_dir, osw_filename))
     cursor = con.cursor()
     prec_id_and_prec_mod_seqs_and_charges = get_mod_seqs_and_charges(cursor)
     labels_filename = f'{out}_osw_segmentation_labels_array'
     chromatograms_filename = f'{out}_chromatograms_array'
+    times_filename = f'{out}_times_array'
     csv_filename = f'{out}_chromatograms_csv.csv'
 
     for sqMass_root in sqMass_roots:
@@ -392,7 +398,8 @@ def get_cnn_data(
                 labels,
                 bb_start,
                 bb_end,
-                chromatogram) = create_data_from_transition_ids(
+                chromatogram,
+                times) = create_data_from_transition_ids(
                 sqMass_root,
                 'output.sqMass',
                 transition_ids,
@@ -414,10 +421,12 @@ def get_cnn_data(
             if not isinstance(chromatogram, np.ndarray):
                 continue
 
-            chromatograms_array.append(chromatogram)
+            if not csv_only:
+                chromatograms_array.append(chromatogram)
+                times_array.append(times)
 
-            if not csv_only and scored:
-                segmentation_labels_matrix.append(labels)
+                if scored:
+                    segmentation_labels_array.append(labels)
 
             chromatograms_csv.append(
                 [
@@ -434,14 +443,20 @@ def get_cnn_data(
     con.close()
 
     if not csv_only:
-        np.save(
-            chromatograms_filename,
-            np.array(chromatograms_array, dtype=np.float32))
+        chromatograms_array = np.array(chromatograms_array, dtype=np.float32)
+        np.save(chromatograms_filename, chromatograms_array)
+        print(f'Saved {chromatograms_filename} of shape {chromatograms_array.shape}')
+        times_array = np.array(times_array, dtype=np.float32)
+        np.save(times_filename, times_array)
+        print(f'Saved {times_filename} of shape {times_array.shape}')
 
         if scored:
-            np.save(
-                labels_filename,
-                np.array(segmentation_labels_matrix, dtype=np.float32))
+            segmentation_labels_array = np.array(
+                segmentation_labels_array, dtype=np.float32)
+            np.save(labels_filename, segmentation_labels_array)
+            print(
+                f'Saved {labels_filename} of shape '
+                f'{segmentation_labels_array.shape}')
 
     with open(csv_filename, 'w', newline='') as f:
         writer = csv.writer(f)
