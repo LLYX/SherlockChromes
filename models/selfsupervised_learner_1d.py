@@ -159,33 +159,29 @@ class SelfSupervisedLearner1d(nn.Module):
     def __init__(self, model, device='cpu', num_local_crops=8, max_epochs=300):
         super(SelfSupervisedLearner1d, self).__init__()
         self.global_augmentator_1 = SelfSupervisedGlobalAugmentatorOne(
-            scale=(0.6, 1),
+            scale=(0.7, 1),
             size=175,
             mode='linear',
-            mz_bins=420,
+            mz_bins=6,
             device=device,
             mean=0,
             std=1)
         self.global_augmentator_2 = SelfSupervisedGlobalAugmentatorTwo(
-            scale=(0.6, 1),
+            scale=(0.7, 1),
             size=175,
             mode='linear',
-            mz_bins=420,
-            num_F=1,
-            m_F=42,
+            mz_bins=6,
             T=7,
             m_T=5)
         self.local_augmentator = SelfSupervisedLocalAugmentator(
-            scale=(0.2, 0.6),
-            size=105,
+            scale=(0.4, 0.7),
+            size=125,
             mode='linear',
-            mz_bins=420,
+            mz_bins=6,
             device=device,
             mean=0,
             std=1,
-            num_F=1,
-            m_F=42,
-            T=2,
+            T=4,
             m_T=5)
         self.student = MultiCropWrapper1d(
             model,

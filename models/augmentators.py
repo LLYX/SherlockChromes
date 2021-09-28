@@ -367,12 +367,11 @@ class SelfSupervisedGlobalAugmentatorOne(nn.Module):
 
 
 class SelfSupervisedGlobalAugmentatorTwo(nn.Module):
-    def __init__(self, scale, size, mode, mz_bins, num_F, m_F, T, m_T):
+    def __init__(self, scale, size, mode, mz_bins, T, m_T):
         super(SelfSupervisedGlobalAugmentatorTwo, self).__init__()
         self.augmentator = nn.Sequential(
             ChromatogramCropper(scale=scale, size=size, mode=mode, p=1),
             ChromatogramTraceMasker(mz_bins=mz_bins),
-            ChromatogramSpectraMasker(mz_bins=mz_bins, F=num_F, m_F=m_F),
             ChromatogramTimeMasker(mz_bins=mz_bins, T=T, m_T=m_T)
         )
     
@@ -390,8 +389,6 @@ class SelfSupervisedLocalAugmentator(nn.Module):
         device,
         mean,
         std,
-        num_F,
-        m_F,
         T,
         m_T
     ):
@@ -407,7 +404,6 @@ class SelfSupervisedLocalAugmentator(nn.Module):
                 p=0.8
             ),
             ChromatogramTraceMasker(mz_bins=mz_bins, p=0.2),
-            ChromatogramSpectraMasker(mz_bins=mz_bins, F=num_F, m_F=m_F, p=0.2),
             ChromatogramTimeMasker(mz_bins=mz_bins, T=T, m_T=m_T, p=0.2)
         )
     
@@ -426,7 +422,7 @@ class SemiSupervisedStrongAugmentator(nn.Module):
                 std=std,
                 device=device
             ),
-            ChromatogramTraceMasker(mz_bins=mz_bins),
+            # ChromatogramTraceMasker(mz_bins=mz_bins),
             ChromatogramSpectraMasker(mz_bins=mz_bins, F=num_F, m_F=m_F),
             ChromatogramTimeMasker(mz_bins=mz_bins, T=T, m_T=m_T)
         )
