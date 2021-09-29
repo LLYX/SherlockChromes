@@ -42,7 +42,7 @@ def parse_skyline_exported_annotations(
     return annotations
 
 
-def create_skyline_augmented_osw_dataset(
+def create_skyline_augmented_npy_dataset(
     annotations,
     osw_dir,
     osw_csv,
@@ -159,3 +159,136 @@ def create_skyline_augmented_osw_dataset(
     np.save(
         os.path.join(out_dir, f'{prefix}_{osw_weak_labels_npy}'),
         orig_weak_labels.astype(np.int32))
+
+
+def create_skyline_augmented_osw_dataset(
+    annotations,
+    osw_dir,
+    osw_csv,
+    osw_strong_labels_npy,
+    osw_weak_labels_npy,
+    osw_times_npy,
+    out_dir,
+    prefix='skyline_augmented',
+    peak_only=False
+):
+    orig_strong_labels = np.load(os.path.join(osw_dir, osw_strong_labels_npy))
+    orig_weak_labels = np.load(os.path.join(osw_dir, osw_weak_labels_npy))
+    times_npy = np.load(os.path.join(osw_dir, osw_times_npy))
+    decoy_counter = 0
+    skyline_strong_counter = 0
+    skyline_weak_counter = 0
+    decoy_idxs, non_decoy_idxs, skyline_idxs = [], [], []
+
+    with open(os.path.join(osw_dir, osw_csv)) as infile:
+        next(infile)
+
+        for line in infile:
+            line = line.rstrip('\r\n').split(',')
+            idx, filename, lib_rt_idx, win_size = (
+                line[0], line[1], line[3], line[4])
+
+            if not lib_rt_idx:
+                lib_rt_idx = times_npy.shape[1] // 2
+
+            if 'DECOY' in filename:
+                # By default, includes positive labels even for decoys
+                # since based on OSW unscored boundaries
+                orig_strong_labels[int(idx)] = np.zeros(
+                    orig_strong_labels[int(idx)].shape)
+                decoy_counter += 1
+                decoy_idxs.append(int(idx))
+                continue
+            elif filename not in annotations:
+                non_decoy_idxs.append(int(idx))
+                continue
+            elif not annotations[filename]['start']:
+                orig_strong_labels[int(idx)] = np.zeros(
+                    orig_strong_labels[int(idx)].shape)
+                orig_weak_labels[int(idx)] = 0
+                skyline_strong_counter += 1
+                skyline_weak_counter += 1
+                skyline_idxs.append(int(idx))
+                continue
+
+            skyline_strong_counter += 1
+            skyline_idxs.append(int(idx))
+
+            try:
+                lib_rt_idx = int(lib_rt_idx)
+                lib_rt = times_npy[int(idx)][lib_rt_idx]
+            except Exception:
+                lib_rt = float(lib_rt)
+
+            if (
+                annotations[filename]['end'] < times_npy[int(idx)][0]
+                or annotations[filename]['start'] > times_npy[int(idx)][-1]
+                or (
+                    peak_only
+                    and not (
+                        times_npy[int(idx)][0]
+                        <= annotations[filename]['rt']
+                        <= times_npy[int(idx)][-1]))
+            ):
+                orig_strong_labels[int(idx)] = np.zeros(
+                    orig_strong_labels[int(idx)].shape)
+                orig_weak_labels[int(idx)] = 0
+                continue
+
+            if peak_only:
+                skyline_left_idx = skyline_right_idx = bisect.bisect(
+                    times_npy[int(idx)], annotations[filename]['rt'])
+            else:
+                skyline_left_idx = bisect.bisect_left(
+                    times_npy[int(idx)], annotations[filename]['start'])
+                skyline_right_idx = bisect.bisect_left(
+                    times_npy[int(idx)], annotations[filename]['end'])
+
+            orig_strong_labels[int(idx)] = np.where(
+                np.logical_and(
+                    times_npy[int(idx)]
+                    >= times_npy[int(idx)][skyline_left_idx],
+                    times_npy[int(idx)]
+                    <= times_npy[int(idx)][skyline_right_idx]),
+                1,
+                0)
+
+            new_weak_label = min(1, np.sum(orig_strong_labels[int(idx)]))
+
+            if new_weak_label != orig_weak_labels[int(idx)]:
+                orig_weak_labels[int(idx)] = new_weak_label
+                skyline_weak_counter += 1
+
+    print(
+        f'Saving skyline augmented segmentation labels array of shape '
+        f'{orig_strong_labels.shape} with '
+        f'{skyline_strong_counter} Skyline substitutions '
+        f'and {decoy_counter} decoy substitutions')
+
+    np.save(
+        os.path.join(out_dir, f'{prefix}_{osw_strong_labels_npy}'),
+        orig_strong_labels.astype(np.int32))
+
+    print(
+        f'Saving skyline augmented classification labels array of shape '
+        f'{orig_weak_labels.shape} with '
+        f'{skyline_weak_counter} Skyline substitutions')
+
+    np.save(
+        os.path.join(out_dir, f'{prefix}_{osw_weak_labels_npy}'),
+        orig_weak_labels.astype(np.int32))
+
+    print('Saving indices in text files')
+
+    np.savetxt(
+        os.path.join(out_dir, 'decoy_idxs.txt'),
+        np.array(decoy_idxs),
+        fmt='%i')
+    np.savetxt(
+        os.path.join(out_dir, 'non_decoy_idxs.txt'),
+        np.array(non_decoy_idxs),
+        fmt='%i')
+    np.savetxt(
+        os.path.join(out_dir, 'skyline_idxs.txt'),
+        np.array(skyline_idxs),
+        fmt='%i')
