@@ -244,6 +244,15 @@ def create_skyline_augmented_osw_dataset(
                     times_npy[int(idx)], annotations[filename]['start'])
                 skyline_right_idx = bisect.bisect_left(
                     times_npy[int(idx)], annotations[filename]['end'])
+            
+            if skyline_right_idx >= times_npy[int(idx)].shape[0]:
+                print(
+                    skyline_left_idx,
+                    skyline_right_idx,
+                    annotations[filename],
+                    times_npy[int(idx)][0],
+                    times_npy[int(idx)][-1])
+                skyline_right_idx = times_npy[int(idx)].shape[0] - 1
 
             orig_strong_labels[int(idx)] = np.where(
                 np.logical_and(

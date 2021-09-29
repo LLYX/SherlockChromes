@@ -681,10 +681,6 @@ class DDSCTransformer(nn.Module):
         out = self.init_encoder(x)
         b, c, length = out.size()
 
-        if self.aggregator_mode == 'cls_embed':
-            cls_tokens = self.cls_token.expand(b, -1, -1)
-            out = torch.cat([cls_tokens, out], dim=-1)
-
         if self.use_pos_emb:
             if not self.pos_emb:
                 self.pos_emb = nn.Embedding(length, c).to(self.device)
@@ -693,6 +689,10 @@ class DDSCTransformer(nn.Module):
                 torch.arange(length).to(self.device)).unsqueeze(0).expand(
                     b, length, c).transpose(1, 2)
             out = out + encoded_positions
+
+        if self.aggregator_mode == 'cls_embed':
+            cls_tokens = self.cls_token.expand(b, -1, -1)
+            out = torch.cat([cls_tokens, out], dim=-1)
 
         out = self.t_blocks(out)
 
