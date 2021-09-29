@@ -114,6 +114,7 @@ def create_skyline_augmented_npy_dataset(
                 orig_strong_labels[int(idx)] = np.zeros(
                     orig_strong_labels[int(idx)].shape)
                 orig_weak_labels[int(idx)] = 0
+                skyline_weak_counter += 1
                 continue
 
             if peak_only:
@@ -173,7 +174,7 @@ def create_skyline_augmented_osw_dataset(
     peak_only=False
 ):
     orig_strong_labels = np.load(os.path.join(osw_dir, osw_strong_labels_npy))
-    orig_weak_labels = np.load(os.path.join(osw_dir, osw_weak_labels_npy))
+    orig_weak_labels = np.zeros(orig_strong_labels.shape[0])
     times_npy = np.load(os.path.join(osw_dir, osw_times_npy))
     decoy_counter = 0
     skyline_strong_counter = 0
@@ -185,8 +186,7 @@ def create_skyline_augmented_osw_dataset(
 
         for line in infile:
             line = line.rstrip('\r\n').split(',')
-            idx, filename, lib_rt_idx, win_size = (
-                line[0], line[1], line[3], line[4])
+            idx, filename, lib_rt_idx = line[0], line[1], line[3]
 
             if not lib_rt_idx:
                 lib_rt_idx = times_npy.shape[1] // 2
@@ -200,17 +200,18 @@ def create_skyline_augmented_osw_dataset(
                 decoy_idxs.append(int(idx))
                 continue
             elif filename not in annotations:
+                orig_weak_labels[int(idx)] = 1
                 non_decoy_idxs.append(int(idx))
                 continue
             elif not annotations[filename]['start']:
                 orig_strong_labels[int(idx)] = np.zeros(
                     orig_strong_labels[int(idx)].shape)
-                orig_weak_labels[int(idx)] = 0
                 skyline_strong_counter += 1
                 skyline_weak_counter += 1
                 skyline_idxs.append(int(idx))
                 continue
 
+            orig_weak_labels[int(idx)] = 1
             skyline_strong_counter += 1
             skyline_idxs.append(int(idx))
 
@@ -232,7 +233,7 @@ def create_skyline_augmented_osw_dataset(
             ):
                 orig_strong_labels[int(idx)] = np.zeros(
                     orig_strong_labels[int(idx)].shape)
-                orig_weak_labels[int(idx)] = 0
+                skyline_weak_counter += 1
                 continue
 
             if peak_only:
