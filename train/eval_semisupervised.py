@@ -497,7 +497,7 @@ def evaluate(
             val_loader_cla,
             val_loader_cla_sl,
             device,
-            tag='Validation'
+            tag='Validation',
             **kwargs)
 
         print('Modulated')
