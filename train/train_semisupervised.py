@@ -279,7 +279,7 @@ def train(
             iou > highest_iou or
             val_loss < lowest_loss
         ):
-            save_path = f"{kwargs['model_savename']}_linear_{epoch}"
+            save_path = f"{kwargs['model_savename']}_{epoch}"
 
             if dice > highest_dice:
                 save_path += f'_dice={dice}'
