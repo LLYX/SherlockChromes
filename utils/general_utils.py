@@ -419,7 +419,8 @@ def get_train_val_test_idx_from_sequences(
     test_seqs,
     naked=True,
     out_dir='.',
-    prefix='dl'
+    prefix='dl',
+    shuffle=False
 ):
     train_idx, val_idx, test_idx = [], [], []
 
@@ -439,9 +440,10 @@ def get_train_val_test_idx_from_sequences(
             elif seq in test_seqs:
                 test_idx.append(idx)
 
-    random.shuffle(train_idx)
-    random.shuffle(val_idx)
-    random.shuffle(test_idx)
+    if shuffle:
+        random.shuffle(train_idx)
+        random.shuffle(val_idx)
+        random.shuffle(test_idx)
 
     np.savetxt(
         os.path.join(out_dir, f'{prefix}_train_idx.txt'),
@@ -466,7 +468,8 @@ def create_train_val_test_split_by_sequence(
     split_csv=None,
     naked=True,
     test_proportion=0.1,
-    prefix='dl'
+    prefix='dl',
+    shuffle=False
 ):
     seq_csv = os.path.join(in_dir, seq_csv)
 
@@ -480,7 +483,14 @@ def create_train_val_test_split_by_sequence(
         seq_csv = split_csv
 
     train_idx, val_idx, test_idx = get_train_val_test_idx_from_sequences(
-        seq_csv, train_seqs, val_seqs, test_seqs, naked, out_dir, prefix)
+        seq_csv,
+        train_seqs,
+        val_seqs,
+        test_seqs,
+        naked,
+        out_dir,
+        prefix,
+        shuffle)
 
 
 def create_supervised_data_split(
