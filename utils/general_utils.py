@@ -487,7 +487,8 @@ def create_train_val_test_split_by_sequence(
 
     if inclusion_idxs:
         filename = os.path.join(in_dir, inclusion_idxs)
-        inclusion_idxs = list(np.loadtxt(filename, dtype='int'))
+        inclusion_idxs = {
+            idx: True for idx in list(np.loadtxt(filename, dtype='int'))}
 
     train_seqs, val_seqs, test_seqs = get_train_val_test_sequence_splits(
         seq_csv,
