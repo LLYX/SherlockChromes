@@ -9,7 +9,7 @@ import time
 from general_utils import calc_bin_idx, get_subsequence_idxs
 
 
-def get_specs_from_sql(con, cursor, repl):
+def get_specs_from_sql(cursor, repl):
     query = \
         f"""SELECT
         PRECURSOR_ID,
@@ -244,7 +244,7 @@ def create_repl_chromatograms_array(
     con = sqlite3.connect(os.path.join(work_dir, osw_filename))
     cursor = con.cursor()
 
-    specs = get_specs_from_sql(con, cursor, repl)
+    specs = get_specs_from_sql(cursor, repl)
 
     chromatograms_array = []
     out_csv = [

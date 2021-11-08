@@ -336,7 +336,12 @@ def create_feature_data(
         writer.writerows(feature_data_csv)
 
 
-def get_seqs_from_csv(seq_csv, naked=True, exclusion_seqs=None):
+def get_seqs_from_csv(
+    seq_csv,
+    naked=True,
+    exclusion_seqs=None,
+    inclusion_idxs=None
+):
     excluded = {}
     if exclusion_seqs:
         for seq in exclusion_seqs:
@@ -346,7 +351,11 @@ def get_seqs_from_csv(seq_csv, naked=True, exclusion_seqs=None):
     with open(seq_csv, 'r') as seq_file:
         next(seq_file)
         for line in seq_file:
-            seq = '_'.join(line.split(',')[1].split('_')[-2:])
+            line = line.split(',')
+            idx, seq = int(line[0]), '_'.join(line[1].split('_')[-2:])
+
+            if inclusion_idxs and idx not in inclusion_idxs:
+                continue
 
             if naked:
                 seq = get_naked_seq(seq)
@@ -376,12 +385,14 @@ def get_train_val_test_sequence_splits(
     seq_csv,
     out_dir,
     naked=True,
+    inclusion_idxs=None,
     test_proportion=0.1,
     train_seqs_filename='train_seqs.txt',
     val_seqs_filename='val_seqs.txt',
     test_seqs_filename='test_seqs.txt'
 ):
-    seq_list = get_seqs_from_csv(seq_csv, naked)
+    seq_list = get_seqs_from_csv(
+        seq_csv, naked=naked, inclusion_idxs=inclusion_idxs)
 
     random.shuffle(seq_list)
 
@@ -466,6 +477,7 @@ def create_train_val_test_split_by_sequence(
     seq_csv,
     out_dir,
     split_csv=None,
+    inclusion_idxs=None,
     naked=True,
     test_proportion=0.1,
     prefix='dl',
@@ -473,16 +485,22 @@ def create_train_val_test_split_by_sequence(
 ):
     seq_csv = os.path.join(in_dir, seq_csv)
 
-    if split_csv:
-        split_csv = os.path.join(in_dir, split_csv)
+    if inclusion_idxs:
+        filename = os.path.join(in_dir, inclusion_idxs)
+        inclusion_idxs = list(np.loadtxt(filename, dtype='int'))
 
     train_seqs, val_seqs, test_seqs = get_train_val_test_sequence_splits(
-        seq_csv, out_dir, naked, test_proportion)
+        seq_csv,
+        out_dir,
+        naked=naked,
+        inclusion_idxs=inclusion_idxs,
+        test_proportion=test_proportion)
 
     if split_csv:
+        split_csv = os.path.join(in_dir, split_csv)
         seq_csv = split_csv
 
-    train_idx, val_idx, test_idx = get_train_val_test_idx_from_sequences(
+    get_train_val_test_idx_from_sequences(
         seq_csv,
         train_seqs,
         val_seqs,
