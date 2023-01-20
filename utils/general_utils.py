@@ -42,6 +42,8 @@ def get_subsequence_idxs(sequence, value, subsequence_size=-1):
         subsequence_left = length - subsequence_size
         value_idx = length - half_span - 1
 
+    subsequence_right = subsequence_right - 1
+
     return subsequence_left, subsequence_right
 
 

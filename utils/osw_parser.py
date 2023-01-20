@@ -7,6 +7,7 @@ import os
 import sqlite3
 import tarfile
 import time
+import pandas as pd
 
 from general_utils import get_subsequence_idxs
 from sql_data_access import SqlDataAccess
@@ -59,10 +60,15 @@ def get_feature_info_from_run(
         LEFT JOIN SCORE_MS2 s ON f.ID = s.FEATURE_ID
         WHERE (s.RANK = 1 OR s.RANK IS NULL)
         ORDER BY p.ID ASC""".format(run_id)
-    res = cursor.execute(query)
-    tmp = res.fetchall()
+    #res = cursor.execute(query)
+    #tmp = res.fetchall()
 
-    return tmp
+    df = pd.read_sql(query, con)
+
+    df = df.sort_values(by="SCORE").groupby('ID').head(1).reset_index().sort_values(by='ID').drop(columns='index')
+    df = list(df.itertuples(index=False, name=None))
+
+    return df
 
 
 def get_transition_ids_and_library_intensities_from_prec_id(
